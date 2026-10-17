@@ -47,6 +47,11 @@ class Oracle:
 
     def __init__(self, cfg: dict, start_state: dict, rules: list | None = None):
         self.max_air_jumps = int(cfg.get("max_air_jumps", 1))
+        self.jump_vy = float(cfg.get("jump_vy", 400))       # a jump sets vy below -jump_vy in one frame
+        self.max_jump_vy = cfg.get("max_jump_vy")           # faster launches (trampolines) are not jumps
+        self.wall_jumps = bool(cfg.get("wall_jumps", False))  # jumping off a wall is not an air jump
+        self.coyote_frames = int(cfg.get("coyote_frames", 0))  # a jump this soon after leaving the floor is a ground jump
+        self.air_frames = 0
         self.start_collectibles = start_state.get("collectibles_left", -1)
         self.start_score = start_state.get("score") or 0  # e.g. a spawn point that lands on a coin
         self.found: dict = {}            # class -> {"frame", "detail"}
@@ -114,11 +119,16 @@ class Oracle:
                 new += self._hit("crash", res["frames"][-1]["f"] if res["frames"] else 0, f"{e['message']} at {e['where']}")
         b = res["state"].get("bounds") or {}
         for f in res["frames"]:
+            self.air_frames = 0 if f.get("floor") else self.air_frames + 1
             if f.get("tunnel") or f.get("inside"):
                 new += self._hit("clip", f["f"], f"{'through' if f.get('tunnel') else 'inside'} geometry at ({f['x']:.0f},{f['y']:.0f})")
-            if f.get("floor"):
+            if f.get("floor") or (self.wall_jumps and f.get("wall")):
                 self.air_jumps = 0
-            elif "vy" in f and "vy" in self.prev and f["vy"] < -400 and f["vy"] - self.prev["vy"] < -400 and not self.prev.get("floor"):
+            elif self.air_frames <= self.coyote_frames:
+                pass
+            elif ("vy" in f and "vy" in self.prev and f["vy"] < -self.jump_vy and f["vy"] - self.prev["vy"] < -self.jump_vy
+                  and not self.prev.get("floor") and not (self.wall_jumps and self.prev.get("wall"))
+                  and (self.max_jump_vy is None or f["vy"] > -float(self.max_jump_vy))):
                 self.air_jumps += 1
                 if self.air_jumps > self.max_air_jumps:
                     new += self._hit("infinite_jump", f["f"], f"air jump #{self.air_jumps} at ({f['x']:.0f},{f['y']:.0f})")
@@ -289,6 +299,7 @@ A tool that returns the same inputs every time makes the tester repeat itself: v
             self.state = self.game.call("reset", seed=self.seed)
             self.oracle.prev = self.state.get("player") or {}
             self.oracle.air_jumps = 0
+            self.oracle.air_frames = 0
             self.oracle.start_collectibles = self.state.get("collectibles_left", -1)
             self.oracle.start_score = self.state.get("score") or 0
             self.oracle.score_frames = []
@@ -413,3 +424,7 @@ def _make(project_name: str, env_name: str):
 HuntTrain = _make("platformer_train", "godot_hunt")
 HuntHeldout = _make("platformer_heldout", "godot_hunt_heldout")
 HuntDodge = _make("dodge_heldout", "godot_hunt_dodge")
+HuntPixel = _make("pixel_adventure", "godot_hunt_pixel")  # third-party game (SlayHorizon, MIT) with the pixel bug set
+HuntPixelClean = _make("pixel_clean", "godot_hunt_pixel_clean")  # same game, nothing planted: real bugs only
+HuntEv01Prefix = _make("ev01_prefix", "godot_hunt_ev01_prefix")  # Ev01/PlatformerController2D before its upstream jump fix
+HuntEv01Fixed = _make("ev01_fixed", "godot_hunt_ev01_fixed")  # same, at the upstream fix (PR #5)

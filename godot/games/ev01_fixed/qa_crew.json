@@ -1,0 +1,12 @@
+{
+  "player_class": "PlatformerController2D",
+  "max_air_jumps": 0,
+  "coyote_frames": 6,
+  "jump_vy": 500,
+  "bounds": {"left": 0, "top": -400, "right": 1056, "bottom": 620},
+  "spawns": [[288, 320], [200, 320], [700, 440], [500, 440]],
+  "description": "a minimal 2D platformer controller demo: a raised ledge on the left above a flat floor, walls on both sides. Run left/right and jump. There is no double jump (one jump, which must start from the ground; a short coyote time of 0.1 s lets you still jump just after walking off an edge)",
+  "letters": {"R": "move_right", "L": "move_left", "J": "jump"},
+  "reset_settle_frames": 10,
+  "press_in_process": true
+}
