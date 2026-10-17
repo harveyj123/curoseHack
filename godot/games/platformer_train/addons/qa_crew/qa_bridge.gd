@@ -8,12 +8,17 @@
 #        -> per-frame trace (position, velocity, floor, tunnelling, overlap), events, final state
 #   {"cmd":"reset","seed":3}                         -> reload the main scene, apply a spawn for the seed
 #   {"cmd":"screenshot","path":"/tmp/x.png"}         -> save the viewport (needs a display, e.g. xvfb)
+#   {"cmd":"say","text":"Hunter · play R30"}          -> show a caption bar at the top of the window
 #   {"cmd":"quit"}
 # Run with `--fixed-fps 60` so every physics frame is exactly 1/60 s: a run is then fully
 # described by (seed, inputs) and replays identically.
 #
 # Optional per-game config at res://qa_crew.json (see README): which node is the player, where the
 # score lives, which nodes are collectibles, level bounds, spawn points, and allowed air jumps.
+#
+# `-- --qa-watch` (with a window) is for people watching a hunt live: `act` runs at real time and the
+# window keeps redrawing while the engine is frozen between commands. Physics stepping is unchanged,
+# so traces are identical to a headless run.
 extends Node
 
 var _server := TCPServer.new()
@@ -24,6 +29,12 @@ var _cfg := {}
 var _frame := 0
 var _seed := 0
 var _pending_spawn = null
+var _hud: Label = null
+var _watch := false
+var _caption: Label = null
+
+# Written by the editor dock's "Replay in game" button; played once at real-time speed, then deleted.
+const REPLAY_FILE := "res://qa_reports/.replay.json"
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -31,16 +42,54 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--qa-port="):
 			port = int(a.split("=")[1])
+		elif a == "--qa-watch":
+			_watch = DisplayServer.get_name() != "headless"
 	if port == 0:
 		set_process(false)
+		if FileAccess.file_exists(REPLAY_FILE) and DisplayServer.get_name() != "headless":
+			_load_cfg()
+			_replay.call_deferred()
 		return
+	_load_cfg()
+	var err := _server.listen(port, "127.0.0.1")
+	print("QA_BRIDGE listening on %d (err %d)" % [port, err])
+	get_tree().node_added.connect(_on_node_added)
+
+func _load_cfg() -> void:
 	if FileAccess.file_exists("res://qa_crew.json"):
 		_cfg = JSON.parse_string(FileAccess.get_file_as_string("res://qa_crew.json"))
 		if _cfg == null:
 			_cfg = {}
-	var err := _server.listen(port, "127.0.0.1")
-	print("QA_BRIDGE listening on %d (err %d)" % [port, err])
-	get_tree().node_added.connect(_on_node_added)
+
+# ------------------------------------------------------------------ replay (no TCP client, no freeze)
+func _replay() -> void:
+	var r = JSON.parse_string(FileAccess.get_file_as_string(REPLAY_FILE))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(REPLAY_FILE))
+	if typeof(r) != TYPE_DICTIONARY:
+		return
+	var layer := CanvasLayer.new()
+	layer.layer = 128
+	add_child(layer)
+	_hud = Label.new()
+	_hud.position = Vector2(8, 6)
+	_hud.add_theme_color_override("font_color", Color(1, 0.35, 0.3))
+	_hud.add_theme_color_override("font_outline_color", Color.BLACK)
+	_hud.add_theme_constant_override("outline_size", 4)
+	layer.add_child(_hud)
+	var plays: Array = r.get("plays", [])
+	var label := "QA replay %s (seed %d)" % [String(r.get("id", "")), int(r.get("seed", 0))]
+	_hud.text = label + "  starting..."
+	await get_tree().create_timer(1.0).timeout  # let the window come up so the whole repro is seen
+	await _reset(int(r.get("seed", 0)))
+	for i in plays.size():
+		_hud.text = "%s  play %d/%d" % [label, i + 1, plays.size()]
+		await _act(plays[i])
+	_hud.text = "%s  done at frame %d" % [label, _frame]
+
+func _client_gone() -> void:
+	# The crew launched this game; when its connection drops (crew exited or was killed), quit instead of lingering.
+	_peer = null
+	get_tree().quit()
 
 func _process(_delta: float) -> void:
 	if _peer == null and _server.is_connection_available():
@@ -50,18 +99,24 @@ func _process(_delta: float) -> void:
 		return
 	_peer.poll()
 	if _peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
-		_peer = null
+		_client_gone()
 		return
 	var n := _peer.get_available_bytes()
 	if n == 0 and not _busy and _buf.find("\n") == -1:
 		# Freeze the whole engine while the crew is thinking: no frames advance between commands,
 		# so a run is exactly reproducible from its command sequence.
 		var t0 := Time.get_ticks_msec()
+		var drawn := t0
 		while n == 0 and Time.get_ticks_msec() - t0 < 20000:
 			OS.delay_msec(1)
+			if _watch and Time.get_ticks_msec() - drawn >= 33:
+				# Watched window: keep it responsive and redrawn (~30 Hz) without advancing any frame.
+				drawn = Time.get_ticks_msec()
+				DisplayServer.process_events()
+				RenderingServer.force_draw()
 			_peer.poll()
 			if _peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
-				_peer = null
+				_client_gone()
 				return
 			n = _peer.get_available_bytes()
 	if n > 0:
@@ -107,10 +162,38 @@ func _dispatch(msg: Dictionary):
 			var p := String(msg.get("path", "user://qa_shot.png"))
 			img.save_png(p)
 			return {"path": p, "size": [img.get_width(), img.get_height()]}
+		"say":
+			_say(String(msg.get("text", "")))
+			return "ok"
 		"quit":
 			get_tree().quit()
 			return "bye"
 	return {"error": "unknown cmd"}
+
+func _say(text: String) -> void:
+	# Caption bar for watched runs. Lives under the bridge (survives scene reloads), ignores the mouse.
+	if _caption == null:
+		var layer := CanvasLayer.new()
+		layer.layer = 128
+		add_child(layer)
+		var bar := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0, 0, 0, 0.65)
+		sb.content_margin_left = 10
+		sb.content_margin_right = 10
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
+		bar.add_theme_stylebox_override("panel", sb)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+		layer.add_child(bar)
+		_caption = Label.new()
+		_caption.add_theme_color_override("font_color", Color.WHITE)
+		_caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.add_child(_caption)
+	_caption.text = text
+	_caption.get_parent().visible = text != ""
 
 # ------------------------------------------------------------------ discovery helpers
 func _player() -> Node:
@@ -235,7 +318,8 @@ func _reset(seed: int) -> Dictionary:
 		if hn and hn.has_method(String(hook["method"])):
 			hn.call(String(hook["method"]))
 	_frame = 0
-	for i in 3:
+	# Games with an intro (fade-in, spawn animation) set reset_settle_frames so play starts once the player can move.
+	for i in int(_cfg.get("reset_settle_frames", 3)):
 		await get_tree().physics_frame
 	return _state()
 
@@ -257,7 +341,7 @@ func _map(cell: int) -> Dictionary:
 			q.collision_mask = (p as CollisionObject2D).collision_mask if p is CollisionObject2D else 1
 			var solid := false
 			for h in space.intersect_point(q, 4):
-				if h.collider is StaticBody2D or h.collider is TileMap or h.collider is AnimatableBody2D:
+				if h.collider is StaticBody2D or h.collider is TileMap or h.collider is TileMapLayer or h.collider is AnimatableBody2D:
 					solid = true
 			row += "#" if solid else "."
 			x += cell
@@ -269,11 +353,19 @@ func _is_solid(h: Dictionary) -> bool:
 	# Solid level geometry only. One-way platforms are excluded: the player legally jumps up through them
 	# and can overlap them, so counting them as walls reports clips in an unmodified game.
 	var c = h.get("collider")
-	if not (c is StaticBody2D or c is TileMap or c is AnimatableBody2D):
+	if not (c is StaticBody2D or c is TileMap or c is TileMapLayer or c is AnimatableBody2D):
 		return false
 	if c is CollisionObject2D:
 		var owner_id: int = c.shape_find_owner(int(h.get("shape", 0)))
 		return not c.is_shape_owner_one_way_collision_enabled(owner_id)
+	if c is TileMapLayer:  # Godot 4.3+ tile layers (one node per layer)
+		var td: TileData = c.get_cell_tile_data(c.get_coords_for_body_rid(h["rid"]))
+		if td:
+			for pl in c.tile_set.get_physics_layers_count():
+				for i in td.get_collision_polygons_count(pl):
+					if td.is_collision_polygon_one_way(pl, i):
+						return false
+		return true
 	if c.has_method("get_coords_for_body_rid"):
 		var coords: Vector2i = c.get_coords_for_body_rid(h["rid"])
 		for layer in c.get_layers_count():
@@ -335,10 +427,16 @@ func _act(inputs: Array, capture_every: int = 0, capture_dir: String = "") -> Di
 	var prev_coll := _collectibles()
 	var prev_pos := (p as Node2D).global_position if p is Node2D else Vector2.ZERO
 	var scene0 := get_tree().current_scene
+	var t0 := Time.get_ticks_usec()
+	var steps := 0
 	for seg in inputs:
 		var hold: Array = seg.get("hold", [])
 		var tap: Array = seg.get("tap", [])
 		var n := clampi(int(seg.get("frames", 1)), 1, 600)
+		# press_in_process: press keys outside the physics step, as real keyboard input arrives, so games that
+		# call Input.is_action_just_pressed() inside _input() see presses after the first segment too.
+		if _cfg.get("press_in_process", false) and Engine.is_in_physics_frame():
+			await get_tree().process_frame
 		for a in hold:
 			if InputMap.has_action(a):
 				_press(a, true)
@@ -349,6 +447,12 @@ func _act(inputs: Array, capture_every: int = 0, capture_dir: String = "") -> Di
 						_press(a, true)
 			await get_tree().physics_frame
 			_frame += 1
+			if _watch:
+				# Watched window: pace by wall clock (--fixed-fps runs as fast as it can), one physics tick per tick time.
+				steps += 1
+				var ahead := t0 + steps * 1000000 / Engine.physics_ticks_per_second - Time.get_ticks_usec()
+				if ahead > 0:
+					OS.delay_usec(ahead)
 			if k == 0:
 				for a in tap:
 					if InputMap.has_action(a) and not hold.has(a):
