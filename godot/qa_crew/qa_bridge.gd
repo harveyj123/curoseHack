@@ -51,8 +51,6 @@ func _ready() -> void:
 			_replay.call_deferred()
 		return
 	_load_cfg()
-	if _watch:
-		Engine.max_fps = Engine.physics_ticks_per_second  # one physics frame per drawn frame: real time
 	var err := _server.listen(port, "127.0.0.1")
 	print("QA_BRIDGE listening on %d (err %d)" % [port, err])
 	get_tree().node_added.connect(_on_node_added)
@@ -420,6 +418,8 @@ func _act(inputs: Array, capture_every: int = 0, capture_dir: String = "") -> Di
 	var prev_coll := _collectibles()
 	var prev_pos := (p as Node2D).global_position if p is Node2D else Vector2.ZERO
 	var scene0 := get_tree().current_scene
+	var t0 := Time.get_ticks_usec()
+	var steps := 0
 	for seg in inputs:
 		var hold: Array = seg.get("hold", [])
 		var tap: Array = seg.get("tap", [])
@@ -434,6 +434,12 @@ func _act(inputs: Array, capture_every: int = 0, capture_dir: String = "") -> Di
 						_press(a, true)
 			await get_tree().physics_frame
 			_frame += 1
+			if _watch:
+				# Watched window: pace by wall clock (--fixed-fps runs as fast as it can), one physics tick per tick time.
+				steps += 1
+				var ahead := t0 + steps * 1000000 / Engine.physics_ticks_per_second - Time.get_ticks_usec()
+				if ahead > 0:
+					OS.delay_usec(ahead)
 			if k == 0:
 				for a in tap:
 					if InputMap.has_action(a) and not hold.has(a):
