@@ -56,6 +56,18 @@ From [SlayHorizon/godot-2d-platformer-demo](https://github.com/SlayHorizon/godot
 - Music: upstream credits "Noodle Cafe" by fettuccini (https://fettuccini.itch.io/noodle-cafe), but
   **the music files are not included** in this repo; only the upstream `credit.txt` is.
 
+### `ev01_prefix/`, `ev01_fixed/`: Ev01 "PlatformerController2D" (arrives with PR #6)
+
+From [Ev01/PlatformerController2D](https://github.com/Ev01/PlatformerController2D) at `1fcf58d`
+(before the upstream fix) and `178b1df` (after it). Code: MIT, (c) 2021 Ev01 (see each folder's
+`LICENSE`). Its only image is Godot's default project icon (below).
+
+### Godot logo
+
+The project icons in the games (`icon.png`, `icon.svg`, `icon.webp`) are the Godot logo or derived
+from it, by Andrea Calabró, licensed CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/; see https://godotengine.org/press/). Unmodified.
+
 ## Our changes to third-party games
 
 Every change we made is a separate git commit after the commit that imported the unmodified copy
