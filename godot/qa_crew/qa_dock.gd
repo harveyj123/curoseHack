@@ -76,8 +76,8 @@ var _sugg_edit := -1
 const STEPS := [
 	["Hunt", "AI testers play your game and try to break it"],
 	["Verify", "Every bug is replayed to prove it is real, cut down to the fewest steps, and recorded as a GIF"],
-	["Coach", "Every night a bigger AI reads how the testers played and rewrites their strategy or writes them a new tool"],
-	["Gate", "A change is kept only if the testers then find more real bugs on the same test runs"],
+	["Coach", "After each training round, a bigger AI reads how the testers played and rewrites their playbook or writes them a new tool (a small helper program the testers can ask for advice while playing)"],
+	["Tryout", "Each change gets a tryout: it is kept only if the testers then find more real bugs on the same test runs"],
 	["Unseen", "Did the testers get better on games they never practiced on?"],
 ]
 var _step_buttons: Array = []
@@ -140,7 +140,7 @@ func _ready() -> void:
 		for i in tabs.get_tab_count():
 			if tabs.get_tab_control(i).name == want:
 				tabs.current_tab = i
-		if want == "Gate" or want == "Tools":
+		if want == "Gate" or want == "Tryout" or want == "Tools":
 			await get_tree().create_timer(1.0).timeout
 			_on_step(3)
 			if want == "Tools":  # the bottom of the Crew tab: night 1's coach-written tool
@@ -203,7 +203,7 @@ func _caption_default() -> void:
 	if _active_step >= 0:
 		step_caption.text = "Now: %d. %s" % [_active_step + 1, STEPS[_active_step][1]]
 	else:
-		step_caption.text = "How it works: AI testers play your game, every bug is proven by a replay, and each night the testers learn. Click a step to see it."
+		step_caption.text = "How it works: AI testers play your game, every bug is proven by a replay, and after each training round the testers learn. Click a step to see it."
 
 func _pill(bg: Color, border: Color) -> StyleBoxFlat:
 	var s := EditorInterface.get_editor_scale()
@@ -406,21 +406,21 @@ func _build_crew() -> Control:
 	coach_title = tries_title
 	root.add_child(tries_title)
 	root.add_child(_rich(tries_text))
-	root.add_child(_section("Its tools (written by the coach)"))
+	root.add_child(_section("Its tools (small helper programs the coach wrote; the testers ask them for advice while playing)"))
 	root.add_child(_rich(tools_text))
-	root.add_child(_section("Real bugs found per test run, night by night (practice)"))
+	root.add_child(_section("Real bugs found per test run, training round by round (practice)"))
 	chart.custom_minimum_size = Vector2(0, 170) * s
 	chart.draw.connect(_draw_chart)
 	chart.resized.connect(chart.queue_redraw)
 	root.add_child(chart)
-	nights_title = _section("Night by night")
+	nights_title = _section("Training round by round")
 	root.add_child(nights_title)
 	root.add_child(_rich(nights_text))
 	var toggle := Button.new()
 	toggle.text = "▸ Details for AI agents"
 	toggle.flat = true
 	toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	toggle.tooltip_text = "Raw genome (meta, roles), scores per session, P(better) and CI, held-out table, tool code and playbook diff"
+	toggle.tooltip_text = "Raw crew version files (meta, roles), scores per session, P(better) and CI, held-out table, tool code and playbook diff"
 	toggle.pressed.connect(func():
 		crew_details.visible = not crew_details.visible
 		toggle.text = ("▾ " if crew_details.visible else "▸ ") + "Details for AI agents")
@@ -432,9 +432,9 @@ func _build_crew() -> Control:
 	crew_details.add_child(_rich(heldout_text))
 	crew_details.add_child(_section("Latest kept change: playbook diff"))
 	crew_details.add_child(_rich(coach_text))
-	crew_details.add_child(_section("Champion genome"))
+	crew_details.add_child(_section("Best crew version (raw files)"))
 	crew_details.add_child(_rich(crew_raw))
-	crew_details.add_child(_section("Every night: verdict stats and tool code"))
+	crew_details.add_child(_section("Every training round: tryout stats and tool code"))
 	crew_details.add_child(_rich(code_text))
 	return scroll
 
@@ -452,7 +452,7 @@ func _build_run() -> Control:
 	_add_row(root, "Python", python_edit)
 	python_edit.placeholder_text = "python3 with Pillow (e.g. <crew folder>/.venv/bin/python3)"
 	python_edit.text = es.get_setting(PYTHON_SETTING) if es.has_setting(PYTHON_SETTING) else _guess_python()
-	_add_row(root, "Crew genome", genome_edit)
+	_add_row(root, "Crew version", genome_edit)
 	genome_edit.placeholder_text = "empty = newest trained crew; none = untrained"
 	genome_edit.text = es.get_setting(GENOME_SETTING) if es.has_setting(GENOME_SETTING) else ""
 	genome_preview.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -481,7 +481,7 @@ func _build_run() -> Control:
 	root.add_child(run_button)
 	# Every hunt runs with the crew the nightly loop trained; make that visible next to the Run button.
 	learned_link.underline = LinkButton.UNDERLINE_MODE_ON_HOVER
-	learned_link.tooltip_text = "Open the Crew tab: how this crew learned, night by night"
+	learned_link.tooltip_text = "Open the Crew tab: how this crew learned, training round by round"
 	learned_link.pressed.connect(func(): tabs.current_tab = _tab_index("Crew"))
 	root.add_child(learned_link)
 	run_status.text = "Idle. Press Run QA crew to start a hunt."
@@ -614,7 +614,7 @@ func _learned_line(gdir: String) -> String:
 	var ver := gdir.get_file().trim_prefix("gen_").lstrip("0")
 	if nights == 0:
 		return "This run uses crew version %s. See how it learned →" % (ver if ver != "" else "0")
-	return "This run uses the learned crew: version %s, from %d kept change(s) in %d night(s) of practice. See how it learned →" % [ver if ver != "" else "0", kept, nights]
+	return "This run uses the learned crew: version %s, from %d kept change(s) in %d training round(s). See how it learned →" % [ver if ver != "" else "0", kept, nights]
 
 func _newest_demo_genome() -> String:
 	# The trained crew shipped with the repo (demo/genomes/gen_NNN), so a fresh checkout hunts with it by default.
@@ -642,7 +642,7 @@ func _on_run() -> void:
 	if g != "" and g != "none":
 		if not g.is_absolute_path():
 			g = repo_edit.text.path_join(g)
-		_out("Crew genome: %s\n" % _esc(g))
+		_out("Crew version: %s\n" % _esc(g))
 		args.append_array(["--genome", g])
 	if watch_check.button_pressed:
 		args.append("--watch")
@@ -1479,7 +1479,7 @@ func _load_crew() -> void:
 	var kept := _nights.filter(func(n): return n.get("accepted", false))
 	var first: float = float(_nights[0].get("mean", 0))
 	var best: float = float(kept[-1].get("mean", 0)) if kept.size() > 0 else first
-	crew_summary.text = "%d night(s), %d change(s) kept, training mean %.2f → %.2f points per session (10 per verified bug)%s" % [
+	crew_summary.text = "%d training round(s), %d change(s) kept, practice mean %.2f → %.2f points per session (10 per verified bug)%s" % [
 		_nights.size() - 1, kept.size() - 1, first, best, (", %d superseded attempt(s) from a restart not shown" % superseded) if superseded > 0 else ""]
 	_load_coach(dir)
 	var gdirs := _genome_dirs(dir)
@@ -1492,13 +1492,13 @@ func _load_crew() -> void:
 	for i in range(_nights.size() - 1, -1, -1):
 		var n: Dictionary = _nights[i]
 		var acc: bool = n.get("accepted", false)
-		var head := "[b]Night %d[/b]  " % int(n.get("gen", i))
+		var head := "[b]Training round %d[/b]  " % int(n.get("gen", i))
 		if int(n.get("gen", i)) == 0:
 			head += "[color=#8a8f99]starting crew[/color]  %.2f bugs per run" % (float(n.get("mean", 0)) / 10.0)
 		elif acc:
-			head += "[bgcolor=#1f6f3a][color=white] ● kept [/color][/bgcolor]  %.2f bugs per run vs %.2f before%s" % [float(n.get("mean", 0)) / 10.0, float(n.get("champion_mean", 0)) / 10.0, _p_better(n)]
+			head += "[bgcolor=#1f6f3a][color=white] ● tryout: kept [/color][/bgcolor]  %.2f bugs per run vs %.2f before%s" % [float(n.get("mean", 0)) / 10.0, float(n.get("champion_mean", 0)) / 10.0, _p_better(n)]
 		elif n.has("mean"):
-			head += "[bgcolor=#4a4f5a][color=white] ○ gate blocked: no gain [/color][/bgcolor]  %.2f bugs per run vs %.2f for the current best%s" % [float(n.get("mean", 0)) / 10.0, float(n.get("champion_mean", 0)) / 10.0, _p_better(n)]
+			head += "[bgcolor=#4a4f5a][color=white] ○ tryout: not kept, no gain [/color][/bgcolor]  %.2f bugs per run vs %.2f for the current best%s" % [float(n.get("mean", 0)) / 10.0, float(n.get("champion_mean", 0)) / 10.0, _p_better(n)]
 		else:
 			head += "[color=#e8615a]× invalid[/color]"
 		t += head + "\n"
@@ -1553,7 +1553,7 @@ func _tool_code(dir: String, n: Dictionary, gdirs: Dictionary) -> String:
 		var shown := "\n".join(lines.slice(0, 60))
 		if lines.size() > 60:
 			shown += "\n# ... %d more lines" % (lines.size() - 60)
-		t += "[b]Night %d: the coach %s tools/%s[/b]%s\n" % [int(n.get("gen", 0)), verb, f, "" if n.get("accepted", false) else "  [color=#8a8f99](rejected candidate)[/color]"]
+		t += "[b]Training round %d: the coach %s the tool %s[/b]%s\n" % [int(n.get("gen", 0)), verb, f, "" if n.get("accepted", false) else "  [color=#8a8f99](rejected candidate)[/color]"]
 		t += "[bgcolor=#00000055][code]%s[/code][/bgcolor]\n" % _esc(shown)
 	return t
 
@@ -1596,12 +1596,12 @@ func _training_status() -> String:
 		else:
 			streak += 1
 	if streak >= PATIENCE:
-		return "Training status: plateaued, no gain in %d nights in a row. Training pauses until your next build." % streak
+		return "Training status: plateaued, no gain in %d training rounds in a row. Training pauses until your next build." % streak
 	var left := PATIENCE - streak
 	var t := "Training status: still learning"
-	t += (", last change kept on night %d." % last_kept) if last_kept > 0 else ", no change kept yet."
+	t += (", last change kept in training round %d." % last_kept) if last_kept > 0 else ", no change kept yet."
 	if streak > 0:
-		t += " %d more blocked night%s and it pauses until your next build." % [left, "" if left == 1 else "s"]
+		t += " %d more round%s with no gain and it pauses until your next build." % [left, "" if left == 1 else "s"]
 	return t
 
 func _genome_summary(gdir: String) -> String:
@@ -1641,7 +1641,7 @@ func _load_nights_plain(dir: String, gdirs: Dictionary) -> void:
 		var n: Dictionary = _nights[i]
 		var g := int(n.get("gen", i))
 		if g == 0:
-			t += "[b]Night 0[/b]: the starting crew found %.2f real bugs per test run.\n" % (float(n.get("mean", 0)) / 10.0)
+			t += "[b]Training round 0[/b]: the starting crew found %.2f real bugs per test run.\n" % (float(n.get("mean", 0)) / 10.0)
 			continue
 		if n.get("accepted", false):
 			var what := "changed its playbook"
@@ -1653,12 +1653,12 @@ func _load_nights_plain(dir: String, gdirs: Dictionary) -> void:
 					var d := _tool_desc(str(mine[f]))
 					what = "wrote a tool, %s, that will %s" % [f.trim_suffix(".py"), d if d != "" else "help the testers"] if not parent.has(f) else "improved its tool %s" % f.trim_suffix(".py")
 					break
-			t += "[b]Night %d[/b]: [color=#5fc77a]kept[/color], found more bugs (%.2f vs %.2f per test run). The coach %s.\n" % [
+			t += "[b]Training round %d[/b]: [color=#5fc77a]tryout: kept[/color], found more bugs (%.2f vs %.2f per test run). The coach %s.\n" % [
 				g, float(n.get("mean", 0)) / 10.0, float(n.get("champion_mean", 0)) / 10.0, _esc(what)]
 		elif n.has("mean"):
-			t += "[b]Night %d[/b]: [color=#8a8f99]blocked, no gain.[/color]\n" % g
+			t += "[b]Training round %d[/b]: [color=#8a8f99]tryout: not kept, no gain.[/color]\n" % g
 		else:
-			t += "[b]Night %d[/b]: [color=#8a8f99]blocked, the coach's change failed its own test.[/color]\n" % g
+			t += "[b]Training round %d[/b]: [color=#8a8f99]not kept, the coach's change failed its own check.[/color]\n" % g
 	nights_text.text = t
 
 func _p_better(n: Dictionary) -> String:
@@ -1682,7 +1682,11 @@ func _fill_card(first: float, best: float, rows: Array, version: int) -> void:
 	var dim := _col("font_disabled_color")
 	if first >= 0:
 		var head := "Your crew is on version %d. " % version
-		if version == 0:
+		var tot := _heldout_totals(rows)
+		if tot[2] > 0:
+			head += "On bugs it never practised on, it now finds %d bugs in %d test runs, up from %d." % [tot[1], tot[2], tot[0]] if tot[1] > tot[0] \
+				else "On bugs it never practised on, it finds %d bugs in %d test runs, was %d." % [tot[1], tot[2], tot[0]]
+		elif version == 0:
 			head += "No change has been kept yet; it finds %.2f real bugs per test run." % (best / 10.0)
 		elif best > first:
 			head += "It now finds %.2f real bugs per test run, up from %.2f." % [best / 10.0, first / 10.0]
@@ -1694,8 +1698,16 @@ func _fill_card(first: float, best: float, rows: Array, version: int) -> void:
 		for row in rows:
 			var a := float(row[1]) / 10.0
 			var b := float(row[2]) / 10.0
-			var how := ("up from %.2f" % a) if b > a else (("down from %.2f" % a) if b < a else "the same as before")
-			sub += "On %s, which it never practiced on: %.2f per test run, %s.\n" % [str(row[0]), b, how]
+			var nr := int(row[3].get("n", 0))
+			if nr > 0:
+				var ta := int(round(a * nr))
+				var tb := int(round(b * nr))
+				var how := ("up from %d" % ta) if tb > ta else (("down from %d" % ta) if tb < ta else "the same as before")
+				sub += "%s: %d bugs in %d test runs, %s.\n" % [str(row[0]), tb, nr, how]
+			else:
+				var how := ("up from %.2f" % a) if b > a else (("down from %.2f" % a) if b < a else "the same as before")
+				sub += "On %s, which it never practiced on: %.2f per test run, %s.\n" % [str(row[0]), b, how]
+		sub += "In practice: %.2f bugs per test run, up from %.2f.\n" % [best / 10.0, first / 10.0] if best > first and not rows.is_empty() else ""
 		if rows.is_empty():
 			sub = "Not yet tested on games it never practiced on."
 		card_box.add_child(_card_label(sub.strip_edges(), 12, dim))
@@ -1704,18 +1716,28 @@ func _fill_card(first: float, best: float, rows: Array, version: int) -> void:
 		card_box.add_child(_card_label("No run loaded yet. Pick a run folder below (demo, or an evolution run such as runs/hunt1) and press Load. This card then shows how many real bugs the starting crew and the trained crew find per test run, on games they never practiced on.", 12, dim))
 		return
 	if rows.is_empty():
-		card_box.add_child(_card_line("Practice games", first, best, null))
+		card_box.add_child(_card_line("Practice games (bugs per test run)", first, best, null))
 		card_box.add_child(_card_label("Unseen-game results appear here once the run has heldout_*.json files (python -m respawn eval).", 11, dim))
 		return
-	card_box.add_child(_card_line("Practice games", first, best, null))
+	card_box.add_child(_card_line("Practice games (bugs per test run)", first, best, null))
 	for row in rows:
 		card_box.add_child(_card_line(str(row[0]), float(row[1]), float(row[2]), row[3]))
 	var better := 0
 	for row in rows:
 		better += 1 if float(row[2]) > float(row[1]) else 0
-	card_box.add_child(_card_label("Real bugs found per test run (each proven by a replay), starting crew → trained crew, %s test runs per game." % str(rows[0][3].get("n", "?")), 11, dim))
+	card_box.add_child(_card_label("Real bugs found (each proven by a replay), starting crew → trained crew, in %s test runs per unseen game." % str(rows[0][3].get("n", "?")), 11, dim))
 	if better == 0:
 		card_box.add_child(_card_label("The trained crew did not do better on these new games: what it learned did not carry over.", 12, Color("#e0a040")))
+
+func _heldout_totals(rows: Array) -> Array:
+	# [bugs before, bugs after, test runs] summed over the unseen games (means are points: 10 per bug)
+	var out := [0, 0, 0]
+	for row in rows:
+		var nr := int(row[3].get("n", 0)) if row[3] is Dictionary else 0
+		out[0] += int(round(float(row[1]) / 10.0 * nr))
+		out[1] += int(round(float(row[2]) / 10.0 * nr))
+		out[2] += nr
+	return out
 
 func _card_line(name: String, a: float, b: float, c) -> Control:
 	var s := EditorInterface.get_editor_scale()
@@ -1725,10 +1747,11 @@ func _card_line(name: String, a: float, b: float, c) -> Control:
 	hb.add_child(n)
 	var gain := b - a
 	var col := Color("#5fc77a") if gain > 0 else (Color("#e8615a") if gain < 0 else _col("font_disabled_color"))
-	var nums := _card_label("%.2f → %.2f" % [a / 10.0, b / 10.0], 20, col)
+	var nr := int(c.get("n", 0)) if c is Dictionary else 0
+	var nums := _card_label(("%d → %d bugs" % [int(round(a / 10.0 * nr)), int(round(b / 10.0 * nr))]) if nr > 0 else ("%.2f → %.2f" % [a / 10.0, b / 10.0]), 20, col)
 	nums.autowrap_mode = TextServer.AUTOWRAP_OFF
 	hb.add_child(nums)
-	var extra := "%+.2f" % (gain / 10.0)
+	var extra := ("%+d" % int(round(gain / 10.0 * nr))) if nr > 0 else ("%+.2f" % (gain / 10.0))
 	var e := _card_label(extra, 11, col)
 	if c is Dictionary and c.has("p_better"):
 		e.tooltip_text = "P(better) = %.2f (paired bootstrap over %s unseen runs)" % [float(c["p_better"]), str(c.get("n", "?"))]
@@ -1766,7 +1789,7 @@ func _load_coach(dir: String) -> void:
 		coach_text.text = "[color=#8a8f99]No coach proposals in this run yet.[/color]"
 		return
 	var pr: Dictionary = last["proposal"]
-	var t := "[b]Night %s[/b]  %s\n" % [str(last.get("gen", "?")), "[color=#5fc77a]kept[/color]" if last.get("accepted", false) else "[color=#8a8f99]gate blocked: no gain (no change was kept yet)[/color]"]
+	var t := "[b]Training round %s[/b]  %s\n" % [str(last.get("gen", "?")), "[color=#5fc77a]kept[/color]" if last.get("accepted", false) else "[color=#8a8f99]tryout: not kept, no gain (no change was kept yet)[/color]"]
 	if str(last.get("diagnosis", "")) != "":
 		t += "[color=#8a8f99]Diagnosis:[/color] %s\n" % _esc(str(last["diagnosis"]).left(220) + ("…" if str(last["diagnosis"]).length() > 220 else ""))
 	t += "[color=#8a8f99]Change:[/color] %s\n" % _esc(str(last.get("change", "")).left(400))
@@ -1783,9 +1806,9 @@ func _load_coach(dir: String) -> void:
 		for l in new_lines:
 			if l.strip_edges() != "" and not old_lines.has(l):
 				diff += "[color=#5fc77a]+ %s[/color]\n" % _esc(l.strip_edges().trim_prefix("- "))
-		t += "\n[b]Playbook diff[/b] (vs the champion it was built on)\n" + (diff if diff != "" else "[color=#8a8f99]no playbook lines changed[/color]\n")
+		t += "\n[b]Playbook diff[/b] (vs the best crew it was built on)\n" + (diff if diff != "" else "[color=#8a8f99]no playbook lines changed[/color]\n")
 	elif champ != "":
-		t += "\n[b]Champion playbook[/b]\n[color=#8a8f99]%s[/color]\n" % _esc(champ.left(1200))
+		t += "\n[b]Best crew's playbook[/b]\n[color=#8a8f99]%s[/color]\n" % _esc(champ.left(1200))
 	coach_text.text = t
 
 func _load_heldout(dir: String) -> Array:
@@ -1860,7 +1883,7 @@ func _draw_chart() -> void:
 		var n: Dictionary = _nights[i]
 		var gen = n.get("gen", i)
 		var x: float = pt.call(gen, lo).x
-		chart.draw_string(font, Vector2(x - 12 * s, sz.y - 6 * s), "N%d" % int(gen), HORIZONTAL_ALIGNMENT_CENTER, 24 * s, fs, dim)
+		chart.draw_string(font, Vector2(x - 12 * s, sz.y - 6 * s), "R%d" % int(gen), HORIZONTAL_ALIGNMENT_CENTER, 24 * s, fs, dim)
 		if n.get("accepted", false):
 			chart.draw_circle(pt.call(gen, n.get("mean", 0)), 5.0 * s, acc)
 		elif n.has("mean"):
@@ -1874,4 +1897,4 @@ func _draw_chart() -> void:
 	chart.draw_string(font, Vector2(lx + 8 * s, 14 * s), "kept (best crew so far)", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, dim)
 	var lx2 := lx + 8 * s + font.get_string_size("kept (best crew so far)", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 14 * s
 	chart.draw_arc(Vector2(lx2, 10 * s), 3.5 * s, 0, TAU, 16, bad, 1.4 * s, true)
-	chart.draw_string(font, Vector2(lx2 + 8 * s, 14 * s), "gate blocked", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, dim)
+	chart.draw_string(font, Vector2(lx2 + 8 * s, 14 * s), "tryout: not kept", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, dim)

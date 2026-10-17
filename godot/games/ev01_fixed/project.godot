@@ -52,3 +52,7 @@ common/enable_pause_aware_picking=true
 
 [rendering]
 
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/qa_crew/plugin.cfg")
