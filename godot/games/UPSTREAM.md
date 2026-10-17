@@ -12,3 +12,6 @@ demo's README):
 Everything we changed at the hackathon is in later git commits on top of the commit that
 imported these copies, so `git diff <import-commit> -- godot/games` shows exactly what is new
 (the QA bridge autoload and the planted bugs, each marked with a `# PLANTED BUG` comment).
+
+`music.ogg` in both platformer copies is replaced with silence we generated, because the upstream
+track ("Pompy" by madbr) carries no license terms from its author. See `THIRD_PARTY_NOTICES.md`.

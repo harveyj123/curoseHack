@@ -1,10 +1,8 @@
 # Bug Hunters: a self-improving Nemotron QA crew for Godot games
 
 Built at the Crusoe x Cerebral Valley **Recursive Agents Hackathon** (Oct 17, 2026), track **Version N+1**.
-Everything in this repo was written during the hackathon **except** the games under `godot/games/`,
-which start as unmodified copies of Godot's official demo projects (see [Credits](#credits) and
-[godot/games/UPSTREAM.md](godot/games/UPSTREAM.md); our changes to them are separate git commits, each
-planted bug is marked `# PLANTED BUG`).
+What is new and what is borrowed is spelled out in
+[What we built today vs. what we used](#what-we-built-today-vs-what-we-used).
 
 ## What it does
 
@@ -147,10 +145,36 @@ python -m respawn.qa check qa_reports/<id>.json
 
 See `runs/hunt1/lineage.jsonl` and `runs/hunt1/heldout_*.md` (filled in during the event).
 
+## What we built today vs. what we used
+
+**Built at the hackathon (Oct 17, 2026), all commits from 10:45 AM PT onward:**
+
+- `respawn/`: the whole self-improvement loop (Crusoe client, agent harness, coach, gatekeeper,
+  sandbox, evolution and held-out evaluation, Godot bug-hunting env, bug oracle, replay verifier,
+  GIF evidence, fix-ready report writer and `check` command).
+- `godot/qa_crew/`: the Godot addon (QA bridge autoload and the QA Crew editor dock), copied into
+  each game's `addons/qa_crew/`.
+- Everything we changed inside `godot/games/`: the planted bug sets A, B and C (each marked
+  `# PLANTED BUG`), `qa_crew.json` files, sample `qa_reports/`, and the silent `music.ogg` that
+  replaces the upstream platformer track.
+- `docs/` screenshots, this README, `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+
+**Used, not written by us:**
+
+- The games under `godot/games/`: Godot's official demos `2d/platformer` and `2d/dodge_the_creeps`
+  (imported unmodified in commit `2bf155c`), and SlayHorizon's MIT 2D platformer with Pixel Frog's
+  CC0 Pixel Adventure art for `pixel_*` (imported unmodified, then changed in later commits). Run
+  `git diff <import-commit> -- godot/games/<game>` to see exactly what we added to each.
+- Godot Engine, Pillow, and NVIDIA Nemotron models served by Crusoe Managed Inference.
+
+Licenses and attributions for all of it are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Our own code is MIT ([LICENSE](LICENSE)).
+
 ## Credits
 
 - Games under test: Godot Engine official demos, `2d/platformer` and `2d/dodge_the_creeps`, from
   [godotengine/godot-demo-projects](https://github.com/godotengine/godot-demo-projects) (MIT; Dodge the
-  Creeps (c) 2017 KidsCanCode, MIT), with their bundled art/audio as credited upstream.
+  Creeps (c) 2017 KidsCanCode, MIT), with art by Kenney (CC0), music by HorrorPen (CC BY 3.0) and the
+  Xolonium font (OFL 1.1). Full list in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - Engine: [Godot Engine](https://godotengine.org) 4.3 (MIT).
 - Models: NVIDIA Nemotron family, served by [Crusoe Managed Inference](https://crusoe.ai).
