@@ -13,7 +13,7 @@ import time
 GODOT = os.environ.get("GODOT_BIN", "/opt/godot/Godot_v4.3-stable_linux.x86_64")
 ERR_RE = re.compile(r"(SCRIPT ERROR|ERROR): (.*)")
 _port_lock = threading.Lock()
-_next_port = [27000 + os.getpid() % 1000 * 3]
+_next_port = [int(os.environ.get("QA_PORT_BASE", 0)) or 27000 + os.getpid() % 1000 * 3]  # QA_PORT_BASE keeps concurrent runs apart
 # QA_VISIBLE=1 runs every game in a real window on $DISPLAY (e.g. an Xvfb screen being recorded), tiled in a
 # grid of QA_TILE (default 640x360) cells so several parallel hunters can be watched at once.
 VISIBLE = os.environ.get("QA_VISIBLE") == "1"
