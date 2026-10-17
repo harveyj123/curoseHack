@@ -1,0 +1,111 @@
+{
+  "id": "infinite_jump-629fb153",
+  "title": "Infinite jump: air jump #2 at (545,9)",
+  "bug_class": "infinite_jump",
+  "game": "/home/user/curosehack/godot/games/pixel_clean",
+  "expected": "At most the allowed number of mid-air jumps (double jump = 1) before touching the floor again.",
+  "actual": "air jump #2 at (545,9)",
+  "repro": {
+    "seed": 2,
+    "plays": [
+      [
+        {
+          "hold": [
+            "ui_right",
+            "ui_up"
+          ],
+          "frames": 20
+        }
+      ],
+      [
+        {
+          "hold": [
+            "ui_right"
+          ],
+          "frames": 30
+        },
+        {
+          "hold": [],
+          "frames": 5
+        },
+        {
+          "hold": [
+            "ui_up"
+          ],
+          "frames": 2
+        }
+      ],
+      [
+        {
+          "hold": [
+            "ui_right"
+          ],
+          "frames": 20
+        },
+        {
+          "hold": [
+            "ui_right",
+            "ui_up"
+          ],
+          "frames": 2
+        }
+      ],
+      [
+        {
+          "hold": [
+            "ui_up"
+          ],
+          "frames": 10
+        }
+      ],
+      [
+        {
+          "hold": [
+            "ui_up"
+          ],
+          "frames": 10
+        }
+      ],
+      [
+        {
+          "hold": [
+            "ui_up"
+          ],
+          "frames": 10
+        }
+      ]
+    ]
+  },
+  "repro_tokens": [
+    "RJ20",
+    "R30 W5 J2",
+    "R20 RJ2",
+    "J10",
+    "J10",
+    "J10"
+  ],
+  "original_plays": 6,
+  "minimized_plays": 6,
+  "reproduced": true,
+  "frame": 79,
+  "state_at_failure": {
+    "x": 549.45,
+    "y": 63.24,
+    "vx": 0.0,
+    "vy": 326.67,
+    "floor": false,
+    "wall": false,
+    "visible": true,
+    "score": 1
+  },
+  "suspects": [
+    "res://source/characters/player/player.gd: jump / double-jump recharge conditions"
+  ],
+  "evidence": {
+    "gif": "evidence/infinite_jump_seed2.gif",
+    "png": "evidence/infinite_jump_seed2.png",
+    "strip": "evidence/infinite_jump_seed2_strip.png",
+    "strip_frames": 5
+  },
+  "check": "python -m respawn.qa check runs/clean_gen0/infinite_jump-629fb153.json"
+}

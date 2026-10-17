@@ -8,3 +8,7 @@ __pycache__/
 .DS_Store
 dist/
 build/
+runs/
+mc/node_modules/
+runs_*.log
+qa_reports/

@@ -1,0 +1,55 @@
+{
+  "player_class": "Player",
+  "score": {
+    "node": "FruitCount",
+    "property": "fruits"
+  },
+  "collectible_class": "Fruit",
+  "max_air_jumps": 2,
+  "bounds": {
+    "left": -16,
+    "top": -16,
+    "right": 1232,
+    "bottom": 336
+  },
+  "spawns": [
+    [
+      293,
+      123
+    ],
+    [
+      330,
+      280
+    ],
+    [
+      450,
+      60
+    ],
+    [
+      700,
+      40
+    ],
+    [
+      900,
+      120
+    ],
+    [
+      60,
+      200
+    ]
+  ],
+  "description": "a 2D pixel-art platformer with two rooms (Pixel Adventure assets): run, jump, double jump, wall slide and wall jump, trampolines, moving platforms, drop through thin platforms with down, collect 27 fruits",
+  "letters": {
+    "R": "ui_right",
+    "L": "ui_left",
+    "J": "ui_up",
+    "D": "ui_down"
+  },
+  "jump_vy": 250,
+  "max_jump_vy": 400,
+  "wall_jumps": true,
+  "reset_settle_frames": 130,
+  "hide_on_reset": [
+    "TransitionLayer"
+  ]
+}

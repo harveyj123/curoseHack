@@ -1,0 +1,20 @@
+{
+  "player_class": "Player",
+  "score": {
+    "node": "Main",
+    "property": "score"
+  },
+  "description": "Dodge the Creeps (Godot's official demo): a top-down arcade game. Move with U/D/L/R to dodge the creeps; the score counts seconds survived; when hit you die (game over), E starts a new game",
+  "letters": {
+    "U": "move_up",
+    "D": "move_down",
+    "L": "move_left",
+    "R": "move_right",
+    "E": "start_game"
+  },
+  "max_air_jumps": 99,
+  "on_reset_call": {
+    "node": "Main",
+    "method": "new_game"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "id": "clip-545d4178",
+  "title": "Clip: through geometry at (0,145)",
+  "bug_class": "clip",
+  "game": "/home/user/curosehack/godot/games/platformer_heldout",
+  "expected": "The player body never passes through or overlaps solid level geometry.",
+  "actual": "through geometry at (0,145)",
+  "repro": {
+    "seed": 7,
+    "plays": [
+      [
+        {
+          "hold": [],
+          "frames": 66
+        }
+      ]
+    ]
+  },
+  "repro_tokens": [
+    "W66"
+  ],
+  "original_plays": 2,
+  "minimized_plays": 1,
+  "reproduced": true,
+  "frame": 54,
+  "state_at_failure": {
+    "x": 0,
+    "y": 145.38,
+    "vx": 0,
+    "vy": 0,
+    "floor": true,
+    "wall": false,
+    "visible": true,
+    "score": 0
+  },
+  "suspects": [
+    "res://player/player.gd: movement code that sets position directly instead of using move_and_slide()"
+  ],
+  "evidence": {
+    "gif": "evidence/clip_seed7.gif",
+    "png": "evidence/clip_seed7.png",
+    "strip": "evidence/clip_seed7_strip.png",
+    "strip_frames": 33
+  },
+  "check": "python -m respawn.qa check godot/games/platformer_heldout/qa_reports/clip-545d4178.json",
+  "plain": {
+    "headline": "The player went through solid ground after a hard landing at (0, 145).",
+    "what_happened": "The player's body moved into solid level geometry instead of stopping on it.",
+    "how_to_see_it": "Start the level from spawn point 8, then wait 0.6 s. Or press Replay in game.",
+    "why_it_matters": "Players can get stuck inside the level or fall through it."
+  }
+}

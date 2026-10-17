@@ -1,0 +1,20 @@
+{
+ "class": "clip",
+ "seed": 7,
+ "inputs": [
+  [
+   {
+    "hold": [],
+    "frames": 66
+   }
+  ]
+ ],
+ "act_index": 0,
+ "frame": 54,
+ "reproduced": true,
+ "bug_frame": 54,
+ "gif": "godot/games/platformer_heldout/qa_reports/evidence/clip_seed7.gif",
+ "png": "godot/games/platformer_heldout/qa_reports/evidence/clip_seed7.png",
+ "strip": "godot/games/platformer_heldout/qa_reports/evidence/clip_seed7_strip.png",
+ "strip_frames": 33
+}

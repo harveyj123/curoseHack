@@ -1,0 +1,82 @@
+[
+  {
+    "text": "The player's horizontal velocity must not exceed 2.5 times WALK_SPEED (750 px/s) after a double jump unless on the floor.",
+    "rationale": "In try_jump(), when _double_jump_charged is true, velocity.x is multiplied by 2.5, and there is no cap on this value, potentially allowing unintended speed boosts.",
+    "severity": "high",
+    "likelihood": 0.7,
+    "id": "player_s_horizontal_velocity",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:02"
+  },
+  {
+    "text": "When the pause menu is opened, the player must not be able to move, jump, or shoot until it is closed.",
+    "rationale": "The pause logic in game.gd only pauses the tree and shows the menu, but does not explicitly disable player input; if input processing continues, actions could leak through.",
+    "severity": "high",
+    "likelihood": 0.6,
+    "id": "when_pause_menu_opened",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:02"
+  },
+  {
+    "text": "When the player releases the jump button while moving upward (velocity.y < 0), vertical velocity must be reduced to no less than 40% of its current value.",
+    "rationale": "The code applies velocity.y *= 0.6 on jump release, but if this logic is bypassed or interrupted (e.g., by pausing or scene change), the full jump velocity could be retained, leading to higher-than-intended jumps.",
+    "severity": "med",
+    "likelihood": 0.5,
+    "id": "when_player_releases_jump",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:02"
+  },
+  {
+    "text": "The player must not be able to shoot while the shoot_timer is running (cooldown active).",
+    "rationale": "The Gun.shoot() method returns false if timer.is_stopped() is false, but if this check is skipped due to input handling or state corruption, rapid-fire shooting could occur.",
+    "severity": "med",
+    "likelihood": 0.4,
+    "id": "player_shoot_while_shoot",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:02"
+  },
+  {
+    "text": "After landing on the floor, the _double_jump_charged flag must be reset to true before any mid-air jump is allowed.",
+    "rationale": "The flag is set in _physics_process() when is_on_floor() is true, but if the player lands exactly on a frame where _physics_process() is skipped or delayed, the flag may not update, blocking the double jump.",
+    "severity": "high",
+    "likelihood": 0.4,
+    "id": "after_landing_on_floor",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:02"
+  },
+  {
+    "text": "After collecting a coin, the player's coin_collected signal must be emitted exactly once per coin.",
+    "rationale": "Coin._on_body_entered() emits the signal once, but if the player re-enters the coin's Area2D due to tunneling or delayed collision exit, double emission could occur.",
+    "severity": "high",
+    "likelihood": 0.3,
+    "id": "after_collecting_coin_player",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:02"
+  },
+  {
+    "text": "The player's camera must never allow the player to move beyond the level bounds (LEFT: -315, TOP: -250, RIGHT: 955, BOTTOM: 690) as defined in level.gd.",
+    "rationale": "The camera limits are set in Level._ready(), but if the player is teleported or moved via script (e.g., knockback, debug) outside the physics update, they could exceed bounds before the camera clamps.",
+    "severity": "low",
+    "likelihood": 0.3,
+    "id": "player_s_camera_allow",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:02"
+  },
+  {
+    "text": "The player's vertical velocity must never exceed TERMINAL_VELOCITY (700 px/s) downward during free fall.",
+    "rationale": "The code uses minf(TERMINAL_VELOCITY, velocity.y + gravity * delta), but if gravity * delta is unusually large (e.g., due to time scaling or paused frame accumulation), this clamp could fail.",
+    "severity": "med",
+    "likelihood": 0.2,
+    "id": "player_s_vertical_velocity",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:02"
+  }
+]
