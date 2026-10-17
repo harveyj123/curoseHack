@@ -5,6 +5,7 @@ pass its own test before the gatekeeper ever sees it), or reassign agent roles.
 """
 from __future__ import annotations
 
+import difflib
 import json
 
 from respawn import env as envmod
@@ -122,6 +123,11 @@ def propose(llm: LLM, env_name: str, champion: Genome, episodes: list, history: 
             cand = apply_proposal(champion, prop, env_cls)
             if cand.fingerprint() == champion.fingerprint():
                 raise ValueError("proposal does not change anything")
+            for h in history:  # the coach tends to re-propose the same rejected idea night after night
+                if not h.get("accepted") and difflib.SequenceMatcher(None, str(prop.get("change", "")).lower(),
+                                                                     str(h.get("change", "")).lower()).ratio() > 0.6:
+                    raise ValueError(f"this repeats the idea rejected at gen {h['gen']}; propose a different kind of change "
+                                     "(e.g. rewrite or remove a tool that makes the players repeat the same inputs)")
             return cand, prop, ""
         except ValueError as e:
             err = str(e)
