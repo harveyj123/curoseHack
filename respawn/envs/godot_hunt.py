@@ -138,10 +138,10 @@ Each found bug is verified automatically by replaying your exact inputs, so only
 
 Controls: call play(inputs) with a string of tokens KEYS+FRAMES, e.g. "R30 RJ20 W5 J10".
 Keys held during the token: {letters}. W means no keys. 60 frames = 1 second.
-A jump starts when J goes from released to pressed; holding J longer jumps higher.
+""" + (f"""A jump starts when J goes from released to pressed; holding J longer jumps higher.
 Two consecutive tokens that both hold J do NOT re-press it; put a W1 between them.
 The game allows {cfg.get('max_air_jumps', 1)} mid-air jump(s) (double jump), more is a bug.
-reset() restarts the level from the spawn point (inputs restart too)."""
+""" if "J" in (cfg.get("letters") or {}) else "") + """reset() restarts the level from the spawn point (inputs restart too)."""
 
     def action_schemas(self, agent):
         return [
