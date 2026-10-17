@@ -76,6 +76,9 @@ Current roles: {json.dumps(champion.roles) if champion.roles else '(none)'}
 
 def apply_proposal(champion: Genome, prop: dict, env_cls) -> Genome:
     cand = champion.copy()
+    for k in ("playbook", "playbook_append"):  # Nemotron often double-escapes the markdown into one line
+        if isinstance(prop.get(k), str) and "\n" not in prop[k].strip() and "\\n" in prop[k]:
+            prop[k] = prop[k].replace("\\n", "\n").replace("\\t", "\t")
     if prop.get("playbook") and isinstance(prop["playbook"], str) and len(prop["playbook"].strip()) > 10:
         cand.playbook = prop["playbook"].strip() + "\n"
     if prop.get("playbook_append"):
