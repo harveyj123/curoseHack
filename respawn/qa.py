@@ -387,8 +387,36 @@ def check(path: str) -> int:
     finally:
         rep.close()
     still = r["bug_class"] in o.found
-    print(f"{r['id']}: {'STILL BROKEN' if still else 'FIXED'}" + (f" ({o.found[r['bug_class']]['detail']})" if still else ""))
+    print(f"{r['id']}: {'STILL BROKEN' if still else 'FIXED'}" + (f" ({o.found[r['bug_class']]['detail']})" if still else ""), flush=True)
     return 1 if still else 0
+
+
+def check_all(paths: list) -> int:
+    """Regression check: replay every saved repro against the current build. Exit 1 if any bug still reproduces."""
+    reports = []
+    for p in paths:
+        files = [os.path.join(p, f) for f in sorted(os.listdir(p))] if os.path.isdir(p) else [p]
+        for f in files:
+            if f.endswith(".json") and not os.path.basename(f).startswith(".") and os.path.basename(f) != "index.json":
+                try:
+                    if "bug_class" in json.load(open(f)):
+                        reports.append(f)
+                except (OSError, ValueError):
+                    pass
+    broken = fixed = failed = 0
+    print(f"PROGRESS check 0/{len(reports)}", flush=True)  # parsed by the editor dock
+    for i, f in enumerate(reports):
+        try:
+            if check(f):
+                broken += 1
+            else:
+                fixed += 1
+        except Exception as e:  # one unreadable report must not stop the sweep
+            failed += 1
+            print(f"{os.path.basename(f)[:-5]}: CHECK FAILED ({type(e).__name__}: {e})", flush=True)
+        print(f"PROGRESS check {i + 1}/{len(reports)}", flush=True)
+    print(f"SUMMARY {broken} still broken, {fixed} fixed" + (f", {failed} could not run" if failed else ""), flush=True)
+    return 1 if broken else 0
 
 
 def env_for_project(project: str) -> str:
@@ -468,8 +496,8 @@ def main(argv=None):
     h.add_argument("--no-evidence", action="store_true")
     h.add_argument("--watch", action="store_true", help="first session plays in a visible, captioned, real-time game window")
     h.add_argument("--mock", action="store_true", help="offline: scripted hunter, no API calls")
-    c = sub.add_parser("check")
-    c.add_argument("report")
+    c = sub.add_parser("check", help="re-run saved repros: one report, or every report in a folder (regression check)")
+    c.add_argument("report", nargs="+", help="report .json files or qa_reports folders")
     r = sub.add_parser("rules", help="house rules: compile plain-English rules into oracle checks")
     r.add_argument("action", choices=["compile", "list", "test", "suggest"])
     r.add_argument("--n", type=int, default=8, help="suggest: how many rules to propose")
@@ -478,7 +506,9 @@ def main(argv=None):
     r.add_argument("--mock", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "check":
-        return check(a.report)
+        if len(a.report) == 1 and os.path.isfile(a.report[0]):
+            return check(a.report[0])
+        return check_all(a.report)
     if a.cmd == "rules":
         from respawn import rules as house_rules
         if a.action == "suggest":

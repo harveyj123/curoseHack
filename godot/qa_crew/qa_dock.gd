@@ -149,6 +149,9 @@ func _ready() -> void:
 		for i in tabs.get_tab_count():
 			if tabs.get_tab_control(i).name == want:
 				tabs.current_tab = i
+		if want == "Recheck":  # docs screenshots: run Re-check all on the Bugs tab
+			tabs.current_tab = _tab_index("Bugs")
+			_recheck_all(Button.new())
 		if want == "Gate" or want == "Tryout" or want == "Tools":
 			await get_tree().create_timer(1.0).timeout
 			_on_step(3)
@@ -334,7 +337,12 @@ func _build_bugs() -> Control:
 	confirm.confirmed.connect(_clear_bugs)
 	root.add_child(confirm)
 	clear.pressed.connect(func(): confirm.popup_centered())
+	var recheck := Button.new()
+	recheck.text = "Re-check all"
+	recheck.tooltip_text = "Regression check: replay every saved bug against the current build (no AI calls) and mark each fixed or still broken"
+	recheck.pressed.connect(func(): _recheck_all(recheck))
 	# Buttons first, so a narrow dock clips the count text, never the buttons.
+	bar.add_child(recheck)
 	bar.add_child(clear)
 	bar.add_child(refresh)
 	bar.add_child(bug_count)
@@ -1034,6 +1042,37 @@ func _show(line: String) -> void:
 		_out(_esc(line) + "\n")
 
 # ------------------------------------------------------------------ Bugs tab
+var _recheck := {}  # report id -> true when still broken, false when fixed (from the last Re-check all)
+
+func _recheck_all(button: Button) -> void:
+	if repo_edit.text.strip_edges() == "":
+		bug_count.text = "Set the crew folder in the Run tab first."
+		return
+	button.disabled = true
+	_recheck.clear()
+	bug_count.text = "Re-checking saved bugs on this build…"
+	var job = _spawn(PackedStringArray([_python(), "-m", "respawn.qa", "check", ProjectSettings.globalize_path(REPORTS)]),
+		_recheck_line, _recheck_done.bind(button))
+	if job == null:
+		button.disabled = false
+		bug_count.text = "Could not start %s." % _python()
+
+func _recheck_line(line: String) -> void:
+	if line.begins_with("PROGRESS check "):
+		var kd := line.get_slice(" ", 2).split("/")
+		bug_count.text = "Re-checking saved bugs on this build: %s of %s…" % [kd[0], kd[1] if kd.size() > 1 else "?"]
+	elif line.contains(": STILL BROKEN") or line.ends_with(": FIXED"):
+		_recheck[line.get_slice(":", 0)] = line.contains("STILL BROKEN")
+	elif line.begins_with("SUMMARY "):
+		bug_count.text = "This build: " + line.substr(8)
+
+func _recheck_done(_code: int, _out: String, button: Button) -> void:
+	button.disabled = false
+	var summary := bug_count.text
+	_apply_bugs()  # redraw the rows with their fixed / still broken marks
+	bug_count.text = summary
+	bug_count.tooltip_text = summary
+
 func _clear_bugs() -> void:
 	# Archive, never delete: reports, index and evidence (replays, GIFs) move to qa_reports/archive/<timestamp>/.
 	var base := ProjectSettings.globalize_path(REPORTS)
@@ -1178,6 +1217,11 @@ func _bug_row(r: Dictionary, i: int) -> Button:
 	mark.text = "● repro" if ok else "○ no repro"
 	mark.tooltip_text = "Reproduces on a fresh re-run" if ok else "Did not reproduce on a fresh re-run"
 	mark.add_theme_color_override("font_color", Color("#e8615a") if ok else _col("font_disabled_color"))
+	if _recheck.has(r.get("id", "")):  # the last Re-check all against the current build
+		var still: bool = _recheck[r["id"]]
+		mark.text = "● still broken" if still else "✔ fixed"
+		mark.tooltip_text = "Re-checked on the current build"
+		mark.add_theme_color_override("font_color", Color("#e8615a") if still else Color("#5fc77a"))
 	head.add_child(mark)
 	vb.add_child(head)
 	var title := Label.new()
