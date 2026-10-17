@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="Pixel Adventure (clean)"
+config/name="Pixel Adventure (original, real bugs)"
 run/main_scene="res://source/main.tscn"
 config/features=PackedStringArray("4.4", "GL Compatibility")
 config/icon="res://assets/pixel-adventure/Main Characters/Ninja Frog/Fall (32x32).png"

@@ -79,6 +79,7 @@ func _replay() -> void:
 	var plays: Array = r.get("plays", [])
 	var label := "QA replay %s (seed %d)" % [String(r.get("id", "")), int(r.get("seed", 0))]
 	_hud.text = label + "  starting..."
+	_hide_intro()
 	await get_tree().create_timer(1.0).timeout  # let the window come up so the whole repro is seen
 	await _reset(int(r.get("seed", 0)))
 	for i in plays.size():
@@ -312,6 +313,7 @@ func _reset(seed: int) -> Dictionary:
 	if p and spawns.size() > 0:
 		var s = spawns[seed % spawns.size()]
 		(p as Node2D).global_position = Vector2(s[0], s[1])
+	_hide_intro()
 	var hook = _cfg.get("on_reset_call")  # e.g. press "Start" for games that open on a title screen
 	if hook != null:
 		var hn := _find(get_tree().root, func(n): return n.name == String(hook["node"]))
@@ -322,6 +324,14 @@ func _reset(seed: int) -> Dictionary:
 	for i in int(_cfg.get("reset_settle_frames", 3)):
 		await get_tree().physics_frame
 	return _state()
+
+func _hide_intro() -> void:
+	# hide_on_reset: names of purely visual intro layers (a scene-transition fade) to hide in QA runs and replays.
+	# Only their drawing is hidden: their tweens and signals still run, so gameplay is unchanged.
+	for nm in _cfg.get("hide_on_reset", []):
+		var n := _find(get_tree().root, func(x): return x.name == String(nm))
+		if n != null and "visible" in n:
+			n.visible = false
 
 func _map(cell: int) -> Dictionary:
 	# Coarse collision map of the level (# = solid), sampled at cell centres inside the bounds.
