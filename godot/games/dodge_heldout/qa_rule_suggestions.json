@@ -1,0 +1,82 @@
+[
+  {
+    "text": "The player's animation must correctly reflect the direction of movement, with priority given to vertical over horizontal when both axes are non-zero.",
+    "rationale": "Player.gd uses if-elif for velocity.x and velocity.y, so diagonal movement triggers only horizontal animation, causing incorrect sprite facing.",
+    "severity": "low",
+    "likelihood": 0.9,
+    "id": "player_s_animation_correctly",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:21"
+  },
+  {
+    "text": "The player must never move outside the screen bounds defined by the viewport size.",
+    "rationale": "Player.gd clamps position only when moving purely horizontally or vertically (velocity.x == 0 or velocity.y == 0), allowing diagonal movement to bypass clamping and go off-screen.",
+    "severity": "high",
+    "likelihood": 0.8,
+    "id": "player_move_outside_screen",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:21"
+  },
+  {
+    "text": "When the player is hit, they must become invisible and disable their collision shape on the same frame.",
+    "rationale": "_on_Player_body_entered hides the player and defers collision shape disable, but if another mob hits in the same frame before deferral, double-hit or scoring issues may occur.",
+    "severity": "med",
+    "likelihood": 0.6,
+    "id": "when_player_hit_they",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:21"
+  },
+  {
+    "text": "The score must increase by exactly 1 every second after the StartTimer times out and before game over.",
+    "rationale": "ScoreTimer.timeout increments score by 1 and updates HUD; if timer is disrupted (e.g., paused or reset incorrectly), score drift can occur.",
+    "severity": "high",
+    "likelihood": 0.5,
+    "id": "score_increase_by_exactly",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:21"
+  },
+  {
+    "text": "While the player is invisible (after being hit), they must not be able to collide with mobs or trigger hit signals.",
+    "rationale": "CollisionShape2D is disabled via set_deferred, but if the hit signal is processed before deferral or if visibility and collision are not synchronized, ghost collisions may occur.",
+    "severity": "med",
+    "likelihood": 0.5,
+    "id": "while_player_invisible_after",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:21"
+  },
+  {
+    "text": "After a game over, pressing E must reset the score to 0 and restart mob and score timers.",
+    "rationale": "new_game() resets score and starts timers, but if called mid-game or without stopping existing timers, score or mob spawns may behave incorrectly.",
+    "severity": "high",
+    "likelihood": 0.4,
+    "id": "after_game_over_pressing",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:21"
+  },
+  {
+    "text": "Mob instances must be removed from the scene when they exit the screen viewport.",
+    "rationale": "Mob.gd uses _on_VisibilityNotifier2D_screen_exited to queue_free; if notifier fails or is disconnected, mobs accumulate and cause performance issues.",
+    "severity": "med",
+    "likelihood": 0.3,
+    "id": "mob_instances_removed_from",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:21"
+  },
+  {
+    "text": "During the 'Get Ready' message display, the player must not be able to move or be hit by mobs.",
+    "rationale": "Player starts hidden and collision shape disabled via start(), but if input is processed before show() or if mobs spawn early due to timer overlap, premature interaction can occur.",
+    "severity": "low",
+    "likelihood": 0.2,
+    "id": "during_get_ready_message",
+    "status": "new",
+    "model": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "created": "2026-10-17 20:58:21"
+  }
+]

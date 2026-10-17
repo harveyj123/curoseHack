@@ -41,7 +41,16 @@ dock. QA hunts then show the hunters the rules to break, and a violation is a ve
 the same minimized replay, GIF, report and `qa check` as the built-in classes (the report keeps the rule's
 code, so `check` judges the same rule later). Rules live in `res://qa_rules.json`; they apply to QA hunts
 only, never to evolution or held-out scoring. `platformer_heldout` ships three compiled rules and a sample
-rule report. CLI: `python -m respawn.qa rules compile|list|test --project <game>`.
+rule report. CLI: `python -m respawn.qa rules compile|list|test|suggest --project <game>`.
+
+**Suggest rules**: instead of typing generic rules, press *Suggest rules with Nemotron*: Super reads the game's
+own scripts (our `# PLANTED BUG` markers are stripped), main scene, controls and a short bridge playthrough, and
+proposes ~8 game-specific rules with a rationale citing the code, severity and likelihood
+(`res://qa_rule_suggestions.json`; precomputed for both held-out games). Accept turns one into a rule (then
+Compile), Edit tweaks it first, Reject greys it out. **N+1 here too:** past accepted and rejected suggestions go
+back into the next prompt, so each round proposes kinds of rules the developer has not already judged.
+
+![QA Crew dock, suggested rules](docs/dock_suggest.png)
 
 ## How the crew plays a Godot game
 

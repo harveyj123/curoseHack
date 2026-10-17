@@ -58,6 +58,15 @@ var _rules: Array = []
 var _rule_open := {}
 var _compile_job = null
 var _compile_t0 := 0
+# Suggested rules (res://qa_rule_suggestions.json)
+const SUGGEST_FILE := "res://qa_rule_suggestions.json"
+var suggest_button := Button.new()
+var suggest_sort := OptionButton.new()
+var suggest_list := VBoxContainer.new()
+var _suggestions: Array = []
+var _suggest_job = null
+var _suggest_t0 := 0
+var _sugg_edit := -1
 # How-it-works stepper + run status
 const STEPS := [
 	["Hunt", "Nemotron hunters play the game through the bridge and try to break it"],
@@ -110,6 +119,7 @@ func _ready() -> void:
 	add_child(_anim_timer)
 	_refresh_bugs()
 	_load_rules()
+	_load_suggestions()
 	_load_crew()
 	# For docs screenshots: QA_DOCK_TAB=Rules opens that tab (and the first rule's check).
 	var want := OS.get_environment("QA_DOCK_TAB")
@@ -117,6 +127,11 @@ func _ready() -> void:
 		for i in tabs.get_tab_count():
 			if tabs.get_tab_control(i).name == want:
 				tabs.current_tab = i
+		if want == "Suggest":  # Rules tab scrolled to the suggestions
+			tabs.current_tab = _tab_index("Rules")
+			await get_tree().create_timer(1.0).timeout
+			var sc := tabs.get_tab_control(_tab_index("Rules")) as ScrollContainer
+			sc.scroll_vertical = int(suggest_list.get_parent().get_child(suggest_list.get_index() - 3).position.y)
 		if want == "Rules" and _rules.size() > 0:
 			_rule_open[str(_rules[0].get("id", 0))] = true
 			_render_rules()
@@ -463,6 +478,8 @@ func _read_pipe(job: Dictionary) -> void:
 		job["mutex"].unlock()
 
 func _process(_delta: float) -> void:
+	if _suggest_job != null:
+		suggest_button.text = "%s Nemotron is reading the game... %ds" % [["|", "/", "-", "\\"][(Time.get_ticks_msec() / 150) % 4], (Time.get_ticks_msec() - _suggest_t0) / 1000]
 	if _compile_job != null:  # a Super call can take a minute under load: show it is alive
 		var secs := (Time.get_ticks_msec() - _compile_t0) / 1000
 		compile_button.text = "%s Compiling with Nemotron... %ds" % [["|", "/", "-", "\\"][(Time.get_ticks_msec() / 150) % 4], secs]
@@ -915,7 +932,189 @@ func _build_rules() -> Control:
 	rules_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rules_list.add_theme_constant_override("separation", int(6 * s))
 	root.add_child(rules_list)
+	root.add_child(HSeparator.new())
+	root.add_child(_section("Suggested by Nemotron for this game"))
+	var hint := Label.new()
+	hint.text = "Nemotron Super reads this game's scripts, scene, controls and a short playthrough and proposes what could break here. Accept adds it as a rule; rejected ideas steer the next suggestions."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_color_override("font_color", _col("font_disabled_color"))
+	hint.add_theme_font_size_override("font_size", int(12 * s))
+	root.add_child(hint)
+	var sbar := HBoxContainer.new()
+	suggest_button.text = "Suggest rules with Nemotron"
+	suggest_button.tooltip_text = "One Nemotron Super call (plus one repair if needed)"
+	suggest_button.pressed.connect(_suggest_rules)
+	suggest_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sbar.add_child(suggest_button)
+	suggest_sort.add_item("Most likely first")
+	suggest_sort.add_item("Most severe first")
+	suggest_sort.item_selected.connect(func(_i): _render_suggestions())
+	sbar.add_child(suggest_sort)
+	root.add_child(sbar)
+	suggest_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	suggest_list.add_theme_constant_override("separation", int(6 * s))
+	root.add_child(suggest_list)
 	return scroll
+
+# ------------------------------------------------------------------ suggested rules
+func _load_suggestions() -> void:
+	_suggestions.clear()
+	if FileAccess.file_exists(SUGGEST_FILE):
+		var d = JSON.parse_string(FileAccess.get_file_as_string(SUGGEST_FILE))
+		if typeof(d) == TYPE_ARRAY:
+			for x in d:
+				if typeof(x) == TYPE_DICTIONARY and str(x.get("text", "")) != "":
+					_suggestions.append(x)
+	_render_suggestions()
+
+func _save_suggestions() -> void:
+	var f := FileAccess.open(SUGGEST_FILE, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(_suggestions, "  "))
+		f.close()
+
+func _sugg_sev(x: Dictionary) -> int:
+	return {"high": 2, "med": 1, "low": 0}.get(str(x.get("severity", "med")), 1)
+
+func _render_suggestions() -> void:
+	var s := EditorInterface.get_editor_scale()
+	for c in suggest_list.get_children():
+		c.queue_free()
+	if _suggestions.is_empty():
+		var e := Label.new()
+		e.text = "No suggestions yet: press Suggest rules with Nemotron."
+		e.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		e.add_theme_color_override("font_color", _col("font_disabled_color"))
+		suggest_list.add_child(e)
+		return
+	var order := range(_suggestions.size())
+	var by_sev := suggest_sort.selected == 1
+	order.sort_custom(func(a, b):
+		var xa: Dictionary = _suggestions[a]
+		var xb: Dictionary = _suggestions[b]
+		var na := 1 if str(xa.get("status", "new")) == "new" else 0
+		var nb := 1 if str(xb.get("status", "new")) == "new" else 0
+		if na != nb:
+			return na > nb
+		if by_sev and _sugg_sev(xa) != _sugg_sev(xb):
+			return _sugg_sev(xa) > _sugg_sev(xb)
+		return float(xa.get("likelihood", 0)) > float(xb.get("likelihood", 0)))
+	for i in order:
+		var x: Dictionary = _suggestions[i]
+		var status := str(x.get("status", "new"))
+		var done := status != "new"
+		var panel := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0, 0, 0, 0.10 if done else 0.18)
+		sb.set_corner_radius_all(int(4 * s))
+		sb.set_content_margin_all(6 * s)
+		panel.add_theme_stylebox_override("panel", sb)
+		var vb := VBoxContainer.new()
+		panel.add_child(vb)
+		var head := HBoxContainer.new()
+		vb.add_child(head)
+		var sev := _sugg_sev(x)
+		var badge := Label.new()
+		badge.text = SEV_NAMES[sev]
+		badge.add_theme_font_size_override("font_size", int(10 * s))
+		badge.add_theme_color_override("font_color", Color.WHITE)
+		var bsb := StyleBoxFlat.new()
+		bsb.bg_color = Color(SEV_COLORS[sev]) if not done else Color(SEV_COLORS[sev], 0.4)
+		bsb.set_corner_radius_all(int(3 * s))
+		bsb.content_margin_left = 4 * s
+		bsb.content_margin_right = 4 * s
+		badge.add_theme_stylebox_override("normal", bsb)
+		badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		head.add_child(badge)
+		var lik := Label.new()
+		lik.text = "likelihood %d%%" % int(round(float(x.get("likelihood", 0)) * 100))
+		lik.add_theme_font_size_override("font_size", int(11 * s))
+		lik.add_theme_color_override("font_color", _col("font_disabled_color"))
+		lik.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(lik)
+		if done:
+			var st := Label.new()
+			st.text = "✔ accepted" if status == "accepted" else "✘ rejected"
+			st.add_theme_color_override("font_color", Color("#5fc77a") if status == "accepted" else _col("font_disabled_color"))
+			head.add_child(st)
+		if _sugg_edit == i and not done:
+			var ed := TextEdit.new()
+			ed.text = str(x.get("text", ""))
+			ed.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+			ed.custom_minimum_size = Vector2(0, 58) * s
+			ed.text_changed.connect(func(): _suggestions[i]["text"] = ed.text.strip_edges())
+			vb.add_child(ed)
+		else:
+			var t := Label.new()
+			t.text = str(x.get("text", ""))
+			t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			if done:
+				t.add_theme_color_override("font_color", _col("font_disabled_color"))
+			vb.add_child(t)
+		if not done:
+			var why := Label.new()
+			why.text = str(x.get("rationale", ""))
+			why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			why.add_theme_font_size_override("font_size", int(11 * s))
+			why.add_theme_color_override("font_color", _col("font_disabled_color"))
+			vb.add_child(why)
+			var btns := HBoxContainer.new()
+			btns.alignment = BoxContainer.ALIGNMENT_END
+			var acc := Button.new()
+			acc.text = "Accept"
+			acc.tooltip_text = "Add as a house rule (then Compile)"
+			acc.pressed.connect(_sugg_set.bind(i, "accepted"))
+			var rej := Button.new()
+			rej.text = "Reject"
+			rej.tooltip_text = "Not a rule for this game; the next suggestions will avoid this kind"
+			rej.pressed.connect(_sugg_set.bind(i, "rejected"))
+			var edb := Button.new()
+			edb.text = "Done" if _sugg_edit == i else "Edit"
+			edb.pressed.connect(_sugg_toggle_edit.bind(i))
+			for b in [edb, rej, acc]:
+				btns.add_child(b)
+			vb.add_child(btns)
+		suggest_list.add_child(panel)
+
+func _sugg_toggle_edit(i: int) -> void:
+	_sugg_edit = -1 if _sugg_edit == i else i
+	_save_suggestions()
+	_render_suggestions.call_deferred()
+
+func _sugg_set(i: int, status: String) -> void:
+	_suggestions[i]["status"] = status
+	_sugg_edit = -1
+	if status == "accepted":
+		_rules.append({"text": str(_suggestions[i]["text"]), "enabled": true, "code": "", "compiled_by": "", "suggested": true})
+		_save_rules()
+		_render_rules()
+		_rules_log("Accepted: \"%s\". Press [b]Compile with Nemotron[/b] to turn it into a check." % _esc(_suggestions[i]["text"]), true)
+	_save_suggestions()
+	_render_suggestions.call_deferred()
+
+func _suggest_rules() -> void:
+	if _suggest_job != null:
+		return
+	if repo_edit.text.strip_edges() == "" or key_edit.text.strip_edges() == "":
+		_rules_log("[color=orange]Set the Crusoe API key and the crew folder in the Run tab first.[/color]", true)
+		return
+	_save_suggestions()
+	_rules_log("[b]Suggesting[/b] rules with Nemotron Super...", true)
+	var args := PackedStringArray(["CRUSOE_API_KEY=" + key_edit.text, _python(), "-m", "respawn.qa", "rules", "suggest",
+		"--project", ProjectSettings.globalize_path("res://")])
+	_suggest_job = _spawn(args, func(l: String): _rules_log(_esc(l)), _suggest_done)
+	if _suggest_job == null:
+		_rules_log("[color=red]Could not start %s.[/color]" % _esc(_python()))
+		return
+	suggest_button.disabled = true
+	_suggest_t0 = Time.get_ticks_msec()
+
+func _suggest_done(code: int, _out: String) -> void:
+	_suggest_job = null
+	suggest_button.disabled = false
+	suggest_button.text = "Suggest rules with Nemotron"
+	_rules_log("[color=%s]%s[/color]" % ["#5fc77a" if code == 0 else "#e8615a", "Done: review the suggestions below." if code == 0 else "No suggestions (exit %d)." % code])
+	_load_suggestions()
 
 func _load_rules() -> void:
 	_rules.clear()

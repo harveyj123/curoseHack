@@ -334,3 +334,220 @@ def compile_project(project_dir: str, mock: bool = False, force: bool = False, l
         save_all(project_dir, rules)
     log(f"done: {sum(1 for r in rules if r.get('code') and not r.get('error'))}/{len(rules)} rule(s) compiled")
     return rules
+
+
+# ------------------------------------------------------------------ suggesting rules (game-specific bug hypotheses)
+SUGGEST_FILE = "qa_rule_suggestions.json"
+SEVERITIES = ("high", "med", "low")
+
+SUGGEST_PROMPT = """You are a senior game QA lead. Read this Godot game's code, scene and controls, then propose about {n}
+GAME-SPECIFIC house rules: things that must always hold in THIS game and that you suspect the code may break.
+Prefer rules tied to this game's own mechanics, numbers, states and edge cases (what happens when two systems meet:
+pausing, dying, landing, scoring, timers, restarts, screen edges, combined inputs). Avoid generic physics truisms
+(e.g. "never overlap solid geometry") unless the code gives a specific reason to suspect them.
+
+Each rule must be checkable by an automated oracle that only sees, per physics frame:
+{fields}
+plus "a script error was logged" (crash). Phrase each rule in plain English a developer would type, with concrete
+numbers from the code where useful.
+
+# Game: {name}
+{description}
+
+# Controls (input actions): {actions}
+# qa_crew.json
+{cfg}
+
+# Main scene nodes
+{scene}
+
+# Scripts (comments may be trimmed)
+{scripts}
+
+# A short recorded playthrough (state samples)
+{trace}
+{history}
+Reply with ONLY a JSON object:
+{{"suggestions": [{{"text": "the rule", "rationale": "one line: why this game might break it (cite the code)",
+  "severity": "high|med|low", "likelihood": 0.0-1.0}}]}}"""
+
+
+def suggestions_path(project_dir: str) -> str:
+    return os.path.join(project_dir, SUGGEST_FILE)
+
+
+def load_suggestions(project_dir: str) -> list:
+    p = suggestions_path(project_dir)
+    try:
+        data = json.load(open(p))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return [s for s in data if isinstance(s, dict) and s.get("text")] if isinstance(data, list) else []
+
+
+def _scripts(project_dir: str, budget: int = 14000) -> str:
+    """The game's own .gd files (addons excluded), blank lines and planted-bug markers removed."""
+    out, used = [], 0
+    for root, dirs, files in os.walk(project_dir):
+        dirs[:] = sorted(d for d in dirs if d not in ("addons", "qa_reports", ".godot"))
+        for f in sorted(files):
+            if not f.endswith(".gd"):
+                continue
+            rel = os.path.relpath(os.path.join(root, f), project_dir)
+            lines = []
+            for ln in open(os.path.join(root, f), errors="replace").read().splitlines():
+                if not ln.strip() or "PLANTED" in ln.upper() or ln.strip().startswith("##"):
+                    continue  # the markers we use to document our planted bugs must not leak to the model
+                lines.append(ln.rstrip())
+            body = "\n".join(lines)
+            room = budget - used
+            if room < 200:
+                out.append(f"## res://{rel} (omitted: context budget)")
+                continue
+            if len(body) > room:
+                body = body[:room] + "\n# ... (truncated)"
+            out.append(f"## res://{rel}\n{body}")
+            used += len(body)
+    return "\n\n".join(out)
+
+
+def _scene(project_dir: str, limit: int = 60) -> str:
+    proj = open(os.path.join(project_dir, "project.godot"), errors="replace").read()
+    m = re.search(r'run/main_scene="res://([^"]+)"', proj)
+    if not m or not os.path.exists(os.path.join(project_dir, m.group(1))):
+        return "(unknown)"
+    text = open(os.path.join(project_dir, m.group(1)), errors="replace").read()
+    ext = dict(re.findall(r'\[ext_resource[^\]]*path="([^"]+)"[^\]]*id="([^"]+)"', text))
+    ext = {v: k for k, v in ext.items()}
+    rows = []
+    for nm in re.finditer(r'\[node name="([^"]+)"([^\]]*)\]', text):
+        attrs = nm.group(2)
+        typ = re.search(r'type="([^"]+)"', attrs)
+        inst = re.search(r'instance=ExtResource\("([^"]+)"\)', attrs)
+        par = re.search(r'parent="([^"]+)"', attrs)
+        what = typ.group(1) if typ else (ext.get(inst.group(1), "?") if inst else "?")
+        rows.append(f"- {(par.group(1) + '/') if par and par.group(1) != '.' else ''}{nm.group(1)}: {what}")
+    return f"res://{m.group(1)}\n" + "\n".join(rows[:limit])
+
+
+def _actions(project_dir: str) -> str:
+    proj = open(os.path.join(project_dir, "project.godot"), errors="replace").read()
+    sec = proj.split("[input]", 1)[1].split("\n[", 1)[0] if "[input]" in proj else ""
+    return ", ".join(re.findall(r"^(\w+)=\{", sec, re.M)) or "(default ui_* actions)"
+
+
+def _playthrough(project_dir: str, cfg: dict) -> str:
+    """A few seconds of play through the bridge: each control held in turn, sampled every 15 frames."""
+    try:
+        from respawn.envs.godot_hunt import parse_inputs
+        from respawn.godot.client import GodotGame
+        g = GodotGame(project_dir)
+    except Exception as e:  # noqa: BLE001
+        return f"(no playthrough: {e})"[:200]
+    try:
+        letters = (g.info.get("config") or {}).get("letters") or cfg.get("letters") or {}
+        st = g.call("reset", seed=0)
+        lines = [f"start: player {json.dumps({k: v for k, v in (st.get('player') or {}).items() if k != 'script'})}, "
+                 f"score {st.get('score')}, collectibles_left {st.get('collectibles_left')}, bounds {st.get('bounds')}"]
+        for tok in ["W30"] + [f"{k}40" for k in letters if k not in ("P", "E")][:5] + ["W30"]:
+            res = g.call("act", inputs=parse_inputs(tok, letters))
+            errs = g.take_errors()
+            fr = res["frames"][::15]
+            samp = " ".join(f"f{f['f']}({f['x']:.0f},{f['y']:.0f} v{f.get('vx', 0):.0f},{f.get('vy', 0):.0f}"
+                            f"{' floor' if f.get('floor') else ''}{' hidden' if f.get('visible') is False else ''})" for f in fr)
+            evs = [e for e in res["events"] if e["type"] in ("score", "scene_change", "player_gone")][:4]
+            lines.append(f"{tok}: {samp}" + (f" events {evs}" if evs else "") + (f" ERRORS {errs[:1]}" if errs else ""))
+        return "\n".join(lines)
+    except Exception as e:  # noqa: BLE001
+        return f"(playthrough failed: {e})"[:200]
+    finally:
+        g.close()
+
+
+def suggest_context(project_dir: str) -> dict:
+    cfg_p = os.path.join(project_dir, "qa_crew.json")
+    cfg = json.load(open(cfg_p)) if os.path.exists(cfg_p) else {}
+    name = re.search(r'config/name="([^"]+)"', open(os.path.join(project_dir, "project.godot"), errors="replace").read())
+    return {"name": name.group(1) if name else os.path.basename(project_dir), "description": cfg.get("description", ""),
+            "actions": _actions(project_dir), "cfg": json.dumps({k: v for k, v in cfg.items() if k != "spawns"}),
+            "scene": _scene(project_dir), "scripts": _scripts(project_dir), "trace": _playthrough(project_dir, cfg)}
+
+
+def _clean_suggestions(obj) -> list:
+    items = obj.get("suggestions") if isinstance(obj, dict) else obj
+    out = []
+    for s in items or []:
+        if not isinstance(s, dict) or not str(s.get("text", "")).strip():
+            continue
+        sev = str(s.get("severity", "med")).lower()[:4]
+        sev = {"medi": "med", "mediu": "med"}.get(sev, sev)
+        try:
+            lik = max(0.0, min(1.0, float(s.get("likelihood", 0.5))))
+        except (TypeError, ValueError):
+            lik = 0.5
+        out.append({"text": " ".join(str(s["text"]).split())[:240], "rationale": " ".join(str(s.get("rationale", "")).split())[:300],
+                    "severity": sev if sev in SEVERITIES else "med", "likelihood": round(lik, 2)})
+    return out
+
+
+def _mock_suggest(model, messages, tools):
+    return {"content": json.dumps({"suggestions": [
+        {"text": "The score never changes while the player is hidden.", "rationale": "(mock) score timer keeps running", "severity": "med", "likelihood": 0.6},
+        {"text": "The player never leaves the screen bounds.", "rationale": "(mock) clamp may be skipped", "severity": "med", "likelihood": 0.5}]})}
+
+
+def suggest_project(project_dir: str, n: int = 8, mock: bool = False, log=print) -> list:
+    """Nemotron Super proposes game-specific rules. At most 2 calls (one + one repair). Keeps the history of
+    accepted/rejected suggestions and shows it to the model so later suggestions explore different kinds."""
+    import time as _time
+
+    from respawn.llm import LLM, SUPER, extract_json
+    project_dir = os.path.abspath(project_dir)
+    old = load_suggestions(project_dir)
+    log(f"reading {os.path.basename(project_dir)}: scripts, main scene, controls, a short playthrough")
+    ctx = suggest_context(project_dir)
+    acc = [s["text"] for s in old if s.get("status") == "accepted"]
+    rej = [s["text"] for s in old if s.get("status") == "rejected"]
+    typed = [r["text"] for r in load_all(project_dir)]
+    hist = ""
+    if acc or typed:
+        hist += "\n# The developer already has these rules (do not repeat them):\n" + "\n".join(f"- {t}" for t in dict.fromkeys(acc + typed))
+    if rej:
+        hist += "\n# The developer REJECTED these suggestions before; propose different kinds of rules:\n" + "\n".join(f"- {t}" for t in rej)
+    prompt = SUGGEST_PROMPT.format(n=n, fields=FIELDS, history=hist + "\n", **ctx)
+    llm = LLM(mock=mock or None)
+    if llm.mock:
+        llm.mock_responder = _mock_suggest
+    msgs = [{"role": "user", "content": prompt}]
+    sugg, problem = [], ""
+    for attempt in range(2):
+        log(f"asking Nemotron Super ({len(prompt) // 4} tokens of context)" if attempt == 0 else f"repairing: {problem}")
+        reply = llm.chat(SUPER, msgs, max_tokens=3000, temperature=0.5, extra={"chat_template_kwargs": {"enable_thinking": False}})
+        content = reply.get("content") or ""
+        try:
+            sugg = _clean_suggestions(extract_json(content))
+        except ValueError as e:
+            sugg, problem = [], f"no JSON object ({e})"
+        if len(sugg) >= 3:
+            break
+        problem = problem or f"only {len(sugg)} usable suggestions"
+        msgs += [{"role": "assistant", "content": content},
+                 {"role": "user", "content": f"That did not parse ({problem}). Reply with ONLY the JSON object with about {n} suggestions."}]
+    if not sugg:
+        log(f"no suggestions: {problem}")
+        return old
+    known = {s["text"].lower() for s in old if s.get("status") in ("accepted", "rejected")} | {t.lower() for t in typed}
+    keep = [s for s in old if s.get("status") in ("accepted", "rejected")]
+    taken = {s.get("id") for s in keep}
+    now = _time.strftime("%Y-%m-%d %H:%M:%S")
+    for s in sorted(sugg, key=lambda s: -s["likelihood"]):
+        if s["text"].lower() in known:
+            continue
+        sid = slug(s["text"], taken)
+        taken.add(sid)
+        keep.append(s | {"id": sid, "status": "new", "model": SUPER.split("/")[-1], "created": now})
+    json.dump(keep, open(suggestions_path(project_dir), "w"), indent=2)
+    for s in [x for x in keep if x["status"] == "new"]:
+        log(f"SUGGEST [{s['severity']}] {s['likelihood']:.2f} {s['text']}  ({s['rationale']})")
+    log(f"done: {sum(1 for x in keep if x['status'] == 'new')} new suggestion(s) in {SUGGEST_FILE}")
+    return keep

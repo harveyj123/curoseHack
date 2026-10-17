@@ -325,7 +325,8 @@ def main(argv=None):
     c = sub.add_parser("check")
     c.add_argument("report")
     r = sub.add_parser("rules", help="house rules: compile plain-English rules into oracle checks")
-    r.add_argument("action", choices=["compile", "list", "test"])
+    r.add_argument("action", choices=["compile", "list", "test", "suggest"])
+    r.add_argument("--n", type=int, default=8, help="suggest: how many rules to propose")
     r.add_argument("--project", required=True)
     r.add_argument("--force", action="store_true", help="recompile rules that already have code")
     r.add_argument("--mock", action="store_true")
@@ -334,6 +335,9 @@ def main(argv=None):
         return check(a.report)
     if a.cmd == "rules":
         from respawn import rules as house_rules
+        if a.action == "suggest":
+            out = house_rules.suggest_project(a.project, n=a.n, mock=a.mock)
+            return 0 if any(x.get("status") == "new" for x in out) else 1
         if a.action == "compile":
             out = house_rules.compile_project(a.project, mock=a.mock, force=a.force)
             return 0 if out and all(x.get("code") and not x.get("error") for x in out) else 1
