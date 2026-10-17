@@ -53,8 +53,12 @@ rule report. CLI: `python -m respawn.qa rules compile|list|test --project <game>
   `--fixed-fps 60`, so a run is exactly reproducible from (seed, inputs). `map` samples a collision map,
   `screenshot`/`capture_every` save frames when the game runs on a virtual display (Xvfb).
 - `plugin.cfg`, `qa_plugin.gd`, `qa_dock.gd`: the **QA Crew** editor dock (enabled in
-  `platformer_heldout` and `dodge_heldout`, which ship sample reports in `qa_reports/`). Four tabs:
-  - **Bugs**: every report in `res://qa_reports/` with a thumbnail, bug class and a "reproduces" mark.
+  `platformer_heldout` and `dodge_heldout`, which ship sample reports in `qa_reports/`). A **How it works**
+  strip on top (1 Hunt, 2 Verify, 3 Coach, 4 Gate, 5 Unseen) lights up the active stage during a hunt and
+  jumps to each stage's output when clicked. Four tabs:
+  - **Bugs**: every report in `res://qa_reports/` with a thumbnail, a severity badge (crash high; clip,
+    out of bounds and house rules medium; others low), bug class and a "reproduces" mark, filterable by class
+    and sorted by severity or newest.
     Selecting one plays the failure animation (a sprite sheet of the GIF frames) and shows expected vs
     actual, the minimal repro, the state at failure and where to look. **Open code** jumps to the suspect
     script line, **Replay in game** runs the game in the editor and plays the exact repro at normal speed
@@ -62,10 +66,12 @@ rule report. CLI: `python -m respawn.qa rules compile|list|test --project <game>
     the repro headless: green *Fixed* or red *Still reproduces*.
   - **Rules**: the game's house rules: add, enable/disable, delete, **Compile with Nemotron**, and review
     each rule's compiled check.
-  - **Crew**: how the crew learned, from a run's `lineage.jsonl`: score per night (filled dots = kept
-    changes on the champion line, hollow = rejected candidates), each night's change and verdict, and
+  - **Crew**: how the crew learned, from a run's files alone: a big version 0 vs latest card (unseen games
+    when `heldout_*.json` exist), the coach's latest change with its playbook diff, and from `lineage.jsonl` score per night (filled dots = kept
+    changes on the champion line, hollow = rejected candidates), each night's change and kept/rejected verdict with P(better), and
     version 0 vs latest on unseen games when `heldout_*.json` files exist.
-  - **Run**: Crusoe API key, crew folder, Python, genome and seeds, **Run QA crew** and a live log. When
+  - **Run**: Crusoe API key, crew folder, Python, genome and seeds, **Run QA crew**, a status line with a
+    progress bar (sessions played, then findings verified) and a live log. When
     the run finishes the dock switches to Bugs.
   - **Watch live** (Run tab checkbox, or `python -m respawn.qa hunt --watch`): the first session plays in a
     visible game window at real time, captioned with the hunter's move, its reasoning and the bugs found so far;
@@ -155,7 +161,7 @@ See `runs/hunt1/lineage.jsonl` and `runs/hunt1/heldout_*.md` (filled in during t
 - `godot/qa_crew/`: the Godot addon (QA bridge autoload and the QA Crew editor dock), copied into
   each game's `addons/qa_crew/`.
 - Everything we changed inside `godot/games/`: the planted bug sets A, B and C (each marked
-  `# PLANTED BUG`), `qa_crew.json` files, sample `qa_reports/`, and the silent `music.ogg` that
+  `# PLANTED BUG`), `qa_crew.json` and `qa_rules.json` (house rules) files, sample `qa_reports/`, and the silent `music.ogg` that
   replaces the upstream platformer track.
 - `docs/` screenshots, this README, `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 

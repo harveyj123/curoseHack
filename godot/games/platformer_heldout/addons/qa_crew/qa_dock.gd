@@ -57,6 +57,30 @@ var compile_button := Button.new()
 var _rules: Array = []
 var _rule_open := {}
 var _compile_job = null
+# How-it-works stepper + run status
+const STEPS := [
+	["Hunt", "Nemotron hunters play the game through the bridge and try to break it"],
+	["Verify", "The oracle replays each finding, shrinks the repro and records a GIF: only real bugs count"],
+	["Coach", "Every night Nemotron Super reads the play logs and rewrites the playbook or writes a tool"],
+	["Gate", "A change is kept only if the crew scores higher on the same sessions (P(better))"],
+	["Unseen", "Version 0 vs the latest crew on games it never trained on"],
+]
+var _step_buttons: Array = []
+var step_caption := Label.new()
+var _active_step := -1
+var run_status := Label.new()
+var run_progress := ProgressBar.new()
+# Bugs filter / sort
+var class_filter := OptionButton.new()
+var sort_mode := OptionButton.new()
+var _all_reports: Array = []
+# Crew tab extras
+var crew_scroll: ScrollContainer
+var score_card := PanelContainer.new()
+var card_box := VBoxContainer.new()
+var coach_title: Label
+var coach_text := RichTextLabel.new()
+var nights_title: Label
 
 var _reports: Array = []
 var _sel := -1
@@ -74,6 +98,7 @@ func _ready() -> void:
 	var s := EditorInterface.get_editor_scale()
 	custom_minimum_size = Vector2(380, 0) * s
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_child(_build_steps())
 	add_child(tabs)
 	tabs.add_child(_build_bugs())
 	tabs.add_child(_build_rules())
@@ -94,6 +119,113 @@ func _ready() -> void:
 		if want == "Rules" and _rules.size() > 0:
 			_rule_open[str(_rules[0].get("id", 0))] = true
 			_render_rules()
+
+# ------------------------------------------------------------------ severity (mirrors respawn.qa.severity)
+func _severity(cls: String) -> int:
+	# 2 = high, 1 = medium, 0 = low. The one place the dock maps bug classes to severity.
+	if cls == "crash":
+		return 2
+	if cls == "clip" or cls == "out_of_bounds" or cls.begins_with("rule:"):
+		return 1
+	return 0
+
+const SEV_NAMES := ["LOW", "MED", "HIGH"]
+const SEV_COLORS := ["#6b7385", "#c98a2b", "#c9423b"]
+
+func _class_label(cls: String) -> String:
+	return ("RULE · " + cls.substr(5)) if cls.begins_with("rule:") else cls.to_upper()
+
+# ------------------------------------------------------------------ how-it-works stepper
+func _build_steps() -> Control:
+	var s := EditorInterface.get_editor_scale()
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", int(2 * s))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", int(3 * s))
+	for i in STEPS.size():
+		var b := Button.new()
+		b.text = "%d %s" % [i + 1, STEPS[i][0]]
+		b.tooltip_text = STEPS[i][1]
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.clip_text = true
+		b.add_theme_font_size_override("font_size", int(12 * s))
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(_on_step.bind(i))
+		b.mouse_entered.connect(func(): step_caption.text = "%d. %s" % [i + 1, STEPS[i][1]])
+		b.mouse_exited.connect(_caption_default)
+		row.add_child(b)
+		_step_buttons.append(b)
+	box.add_child(row)
+	step_caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	step_caption.add_theme_font_size_override("font_size", int(11 * s))
+	step_caption.add_theme_color_override("font_color", _col("font_disabled_color"))
+	box.add_child(step_caption)
+	_paint_steps()
+	_caption_default()
+	return box
+
+func _caption_default() -> void:
+	if _active_step >= 0:
+		step_caption.text = "Now: %d. %s" % [_active_step + 1, STEPS[_active_step][1]]
+	else:
+		step_caption.text = "How it works: hunt → verify → coach → gate → unseen games. Click a step to see its output."
+
+func _pill(bg: Color, border: Color) -> StyleBoxFlat:
+	var s := EditorInterface.get_editor_scale()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = border
+	sb.set_border_width_all(int(1 * s))
+	sb.set_corner_radius_all(int(11 * s))
+	sb.content_margin_left = 6 * s
+	sb.content_margin_right = 6 * s
+	sb.content_margin_top = 2 * s
+	sb.content_margin_bottom = 2 * s
+	return sb
+
+func _paint_steps() -> void:
+	var acc := _col("accent_color")
+	for i in _step_buttons.size():
+		var b: Button = _step_buttons[i]
+		var on := i == _active_step
+		var normal := _pill(Color(acc, 0.85) if on else Color(0, 0, 0, 0.22), acc if on else Color(1, 1, 1, 0.12))
+		var hover := _pill(Color(acc, 0.95) if on else Color(acc, 0.25), acc)
+		b.add_theme_stylebox_override("normal", normal)
+		b.add_theme_stylebox_override("hover", hover)
+		b.add_theme_stylebox_override("pressed", hover)
+		b.add_theme_color_override("font_color", Color.WHITE if on else _col("font_color"))
+		b.add_theme_color_override("font_hover_color", Color.WHITE)
+
+func _set_step(i: int) -> void:
+	_active_step = i
+	_paint_steps()
+	_caption_default()
+
+func _tab_index(tab_name: String) -> int:
+	for i in tabs.get_tab_count():
+		if tabs.get_tab_control(i).name == tab_name:
+			return i
+	return 0
+
+func _on_step(i: int) -> void:
+	step_caption.text = "%d. %s" % [i + 1, STEPS[i][1]]
+	if i <= 1:
+		tabs.current_tab = _tab_index("Bugs")
+		return
+	tabs.current_tab = _tab_index("Crew")
+	var target: Control = score_card
+	if i == 2:
+		target = coach_title
+	elif i == 3:
+		target = nights_title
+	_scroll_crew_to.call_deferred(target)
+
+func _scroll_crew_to(c: Control) -> void:
+	if crew_scroll and c:
+		crew_scroll.scroll_vertical = int(c.position.y)
+		var tw := create_tween()
+		c.modulate = Color(1.6, 1.6, 1.0)
+		tw.tween_property(c, "modulate", Color.WHITE, 1.2)
 
 # ------------------------------------------------------------------ layout
 func _section(text: String) -> Label:
@@ -119,12 +251,25 @@ func _build_bugs() -> Control:
 	root.name = "Bugs"
 	var bar := HBoxContainer.new()
 	bug_count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bug_count.clip_text = true
 	bar.add_child(bug_count)
 	var refresh := Button.new()
 	refresh.text = "Refresh"
 	refresh.pressed.connect(_refresh_bugs)
 	bar.add_child(refresh)
 	root.add_child(bar)
+	var bar2 := HBoxContainer.new()
+	class_filter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	class_filter.clip_text = true
+	class_filter.tooltip_text = "Show one bug class"
+	class_filter.item_selected.connect(func(_i): _apply_bugs())
+	bar2.add_child(class_filter)
+	sort_mode.add_item("Newest first")
+	sort_mode.add_item("Severity first")
+	sort_mode.selected = 1
+	sort_mode.item_selected.connect(func(_i): _apply_bugs())
+	bar2.add_child(sort_mode)
+	root.add_child(bar2)
 	var split := VSplitContainer.new()
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(split)
@@ -142,7 +287,7 @@ func _build_bugs() -> Control:
 	var box := VBoxContainer.new()
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(box)
-	empty_hint.text = "No reports yet. Run the crew (Run tab) or press Refresh."
+	empty_hint.text = "No bugs yet: press Run QA crew in the Run tab (or Refresh after a hunt)."
 	empty_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(empty_hint)
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -176,9 +321,19 @@ func _build_crew() -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.name = "Crew"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	crew_scroll = scroll
 	var root := VBoxContainer.new()
 	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(root)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(_col("accent_color"), 0.12)
+	sb.border_color = Color(_col("accent_color"), 0.6)
+	sb.set_border_width_all(int(1 * s))
+	sb.set_corner_radius_all(int(6 * s))
+	sb.set_content_margin_all(10 * s)
+	score_card.add_theme_stylebox_override("panel", sb)
+	score_card.add_child(card_box)
+	root.add_child(score_card)
 	var bar := HBoxContainer.new()
 	var l := Label.new()
 	l.text = "Run folder"
@@ -201,7 +356,11 @@ func _build_crew() -> Control:
 	root.add_child(chart)
 	root.add_child(_section("Unseen games: version 0 vs latest"))
 	root.add_child(_rich(heldout_text))
-	root.add_child(_section("Nights"))
+	coach_title = _section("Coach: latest change to the playbook")
+	root.add_child(coach_title)
+	root.add_child(_rich(coach_text))
+	nights_title = _section("Gate: every night's verdict")
+	root.add_child(nights_title)
 	root.add_child(_rich(nights_text))
 	return scroll
 
@@ -230,6 +389,15 @@ func _build_run() -> Control:
 	run_button.text = "Run QA crew"
 	run_button.pressed.connect(_on_run)
 	root.add_child(run_button)
+	run_status.text = "Idle. Press Run QA crew to start a hunt."
+	run_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(run_status)
+	run_progress.min_value = 0
+	run_progress.max_value = 1
+	run_progress.value = 0
+	run_progress.show_percentage = false
+	run_progress.custom_minimum_size = Vector2(0, 8) * EditorInterface.get_editor_scale()
+	root.add_child(run_progress)
 	output.bbcode_enabled = true
 	output.scroll_following = true
 	output.selection_enabled = true
@@ -343,18 +511,46 @@ func _on_run() -> void:
 		output.append_text("[color=red]Could not start %s.[/color]\n" % _esc(_python()))
 		return
 	run_button.disabled = true
+	_bugs_this_run = 0
+	_set_status("Starting the crew...", 0, 1)
+	_set_step(0)
 	output.append_text("[b]QA crew started[/b] on %s\n" % project)
+
+var _bugs_this_run := 0
+
+func _set_status(t: String, done: int, total: int) -> void:
+	run_status.text = t
+	run_progress.max_value = maxi(1, total)
+	run_progress.value = done
 
 func _run_done(code: int, _out: String) -> void:
 	_run_job = null
 	run_button.disabled = false
+	_set_step(-1)
+	if code == 0:
+		_set_status("Done: %d verified bug report(s). See the Bugs tab." % _bugs_this_run, 1, 1)
+	else:
+		_set_status("Stopped with exit code %d: see the log below." % code, 0, 1)
 	output.append_text("[b]Done[/b] (exit %d). Reports are in res://qa_reports/\n" % code)
 	EditorInterface.get_resource_filesystem().scan()
 	_refresh_bugs()
 	tabs.current_tab = 0
 
 func _show(line: String) -> void:
+	if line.begins_with("PROGRESS "):  # PROGRESS hunt 2/4 bugs=... | PROGRESS verify 1/3 (respawn.qa hunt)
+		var parts := line.split(" ")
+		var kd := parts[2].split("/") if parts.size() > 2 else PackedStringArray(["0", "1"])
+		var k := int(kd[0])
+		var n := int(kd[1]) if kd.size() > 1 else 1
+		if parts[1] == "hunt":
+			_set_step(0)
+			_set_status("Hunting: %d of %d session(s) played" % [k, n], k, n)
+		else:
+			_set_step(1)
+			_set_status("Verifying: %d of %d finding(s) replayed, minimized and recorded" % [k, n] if n > 0 else "No new findings to verify", k, maxi(n, 1))
+		return
 	if line.begins_with("["):  # a bug report line from respawn.qa
+		_bugs_this_run += 1
 		var id := line.get_slice("-> ", 1).strip_edges()
 		var path := ProjectSettings.globalize_path("res://qa_reports/" + id)
 		output.append_text("[color=tomato]BUG[/color] %s  [url=%s]report[/url]\n" % [_esc(line.get_slice("  repro", 0)), path])
@@ -365,6 +561,33 @@ func _show(line: String) -> void:
 
 # ------------------------------------------------------------------ Bugs tab
 func _refresh_bugs() -> void:
+	_all_reports.clear()
+	if DirAccess.dir_exists_absolute(REPORTS):
+		for f in DirAccess.get_files_at(REPORTS):
+			if not f.ends_with(".json") or f.begins_with(".") or f == "index.json":
+				continue
+			var path := REPORTS.path_join(f)
+			var r = JSON.parse_string(FileAccess.get_file_as_string(path))
+			if typeof(r) == TYPE_DICTIONARY and r.has("bug_class"):
+				r["_path"] = path
+				r["_mtime"] = FileAccess.get_modified_time(path)
+				_all_reports.append(r)
+	# class filter: keep the current choice when it still exists
+	var cur := class_filter.get_item_text(class_filter.selected) if class_filter.selected >= 0 else ""
+	var classes := []
+	for r in _all_reports:
+		if not classes.has(r["bug_class"]):
+			classes.append(r["bug_class"])
+	classes.sort()
+	class_filter.clear()
+	class_filter.add_item("All classes")
+	for c in classes:
+		class_filter.add_item(c)
+		if c == cur:
+			class_filter.selected = class_filter.item_count - 1
+	_apply_bugs()
+
+func _apply_bugs() -> void:
 	var keep := ""
 	if _sel >= 0 and _sel < _reports.size():
 		keep = _reports[_sel].get("id", "")
@@ -372,23 +595,30 @@ func _refresh_bugs() -> void:
 	for row in _rows:
 		row.queue_free()
 	_rows.clear()
-	if DirAccess.dir_exists_absolute(REPORTS):
-		for f in DirAccess.get_files_at(REPORTS):
-			if not f.ends_with(".json") or f.begins_with(".") or f == "index.json":
-				continue
-			var r = JSON.parse_string(FileAccess.get_file_as_string(REPORTS.path_join(f)))
-			if typeof(r) == TYPE_DICTIONARY and r.has("bug_class"):
-				r["_path"] = REPORTS.path_join(f)
-				_reports.append(r)
-	_reports.sort_custom(func(a, b): return a.get("bug_class", "") + a.get("id", "") < b.get("bug_class", "") + b.get("id", ""))
+	var want := class_filter.get_item_text(class_filter.selected) if class_filter.selected > 0 else ""
+	for r in _all_reports:
+		if want == "" or r["bug_class"] == want:
+			_reports.append(r)
+	if sort_mode.selected == 1:
+		_reports.sort_custom(func(a, b):
+			var sa := _severity(a["bug_class"])
+			var sb := _severity(b["bug_class"])
+			return sa > sb if sa != sb else int(a["_mtime"]) > int(b["_mtime"]))
+	else:
+		_reports.sort_custom(func(a, b): return int(a["_mtime"]) > int(b["_mtime"]) if a["_mtime"] != b["_mtime"] else str(a.get("id", "")) < str(b.get("id", "")))
 	var n_rep := 0
+	var n_high := 0
+	for r in _all_reports:
+		n_rep += 1 if r.get("reproduced", false) else 0
+		n_high += 1 if _severity(r["bug_class"]) == 2 else 0
 	for r in _reports:
-		var ok: bool = r.get("reproduced", false)
-		n_rep += 1 if ok else 0
 		var row := _bug_row(r, _rows.size())
 		bug_list.add_child(row)
 		_rows.append(row)
-	bug_count.text = "%d bug report(s), %d reproduce" % [_reports.size(), n_rep] if _reports.size() > 0 else "No bug reports yet"
+	bug_count.text = "%d bug(s): %d reproduce, %d high severity" % [_all_reports.size(), n_rep, n_high] if _all_reports.size() > 0 else "No bug reports yet"
+	class_filter.visible = _all_reports.size() > 0
+	sort_mode.visible = _all_reports.size() > 0
+	empty_hint.text = "No bugs yet: press Run QA crew in the Run tab (or Refresh after a hunt)." if _all_reports.is_empty() else "No %s bugs. Pick All classes." % want
 	empty_hint.visible = _reports.is_empty()
 	_sel = -1
 	detail.visible = false
@@ -429,12 +659,29 @@ func _bug_row(r: Dictionary, i: int) -> Button:
 	vb.add_theme_constant_override("separation", 0)
 	hb.add_child(vb)
 	var head := HBoxContainer.new()
+	var sev := _severity(String(r["bug_class"]))
+	var badge := Label.new()
+	badge.text = SEV_NAMES[sev]
+	badge.add_theme_font_size_override("font_size", int(10 * s))
+	badge.add_theme_color_override("font_color", Color.WHITE)
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(SEV_COLORS[sev])
+	bsb.set_corner_radius_all(int(3 * s))
+	bsb.content_margin_left = 4 * s
+	bsb.content_margin_right = 4 * s
+	badge.add_theme_stylebox_override("normal", bsb)
+	badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	badge.tooltip_text = "Severity: crash = high; clip, out of bounds and house rules = medium; others = low"
+	head.add_child(badge)
 	var cls := Label.new()
-	cls.text = String(r["bug_class"]).to_upper()
+	cls.text = _class_label(String(r["bug_class"]))
+	cls.clip_text = true
+	cls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cls.add_theme_font_override("font", EditorInterface.get_editor_theme().get_font("bold", "EditorFonts"))
 	head.add_child(cls)
 	var mark := Label.new()
-	mark.text = "● reproduces" if ok else "○ did not reproduce"
+	mark.text = "● repro" if ok else "○ no repro"
+	mark.tooltip_text = "Reproduces on a fresh re-run" if ok else "Did not reproduce on a fresh re-run"
 	mark.add_theme_color_override("font_color", Color("#e8615a") if ok else _col("font_disabled_color"))
 	head.add_child(mark)
 	vb.add_child(head)
@@ -454,7 +701,7 @@ func _bug_row(r: Dictionary, i: int) -> Button:
 	sel.set_corner_radius_all(int(3 * s))
 	b.add_theme_stylebox_override("pressed", sel)
 	b.add_theme_stylebox_override("hover_pressed", sel)
-	for c in [head, cls, mark, title, vb, thumb]:
+	for c in [head, cls, mark, title, vb, thumb, badge]:
 		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return b
 
@@ -478,8 +725,9 @@ func _select(i: int) -> void:
 	detail.visible = true
 	d_title.text = r.get("title", r.get("id", ""))
 	var ok: bool = r.get("reproduced", false)
-	d_meta.text = "[color=%s]%s[/color]   [code]%s[/code]   seed %s, frame %s" % [
-		"#e8615a" if ok else "#8a8f99", "● reproduces" if ok else "○ did not reproduce on re-run",
+	var sev := _severity(String(r.get("bug_class", "")))
+	d_meta.text = "[bgcolor=%s][color=white] %s [/color][/bgcolor]  [color=%s]%s[/color]   [code]%s[/code]   seed %s, frame %s" % [
+		SEV_COLORS[sev], SEV_NAMES[sev], "#e8615a" if ok else "#8a8f99", "● reproduces" if ok else "○ did not reproduce on re-run",
 		r.get("bug_class", ""), r.get("repro", {}).get("seed", "?"), r.get("frame", "?")]
 	_set_check("")
 	check_button.disabled = false
@@ -850,15 +1098,18 @@ func _load_crew() -> void:
 				_nights.append(d)
 	chart.queue_redraw()
 	if _nights.is_empty():
-		crew_summary.text = "[color=#8a8f99]No lineage.jsonl in %s yet.[/color]" % _esc(dir)
+		crew_summary.text = "[color=#8a8f99]No run loaded: no lineage.jsonl in %s. Set Run folder to an evolution run (e.g. runs/hunt1) and press Load.[/color]" % _esc(dir)
 		nights_text.text = ""
 		heldout_text.text = ""
+		coach_text.text = ""
+		_fill_card(-1.0, -1.0, [])
 		return
 	var kept := _nights.filter(func(n): return n.get("accepted", false))
 	var first: float = float(_nights[0].get("mean", 0))
 	var best: float = float(kept[-1].get("mean", 0)) if kept.size() > 0 else first
-	crew_summary.text = "%d night(s), %d change(s) kept.  Verified bugs per session: [b]%.2f[/b] → [b]%.2f[/b] (champion)" % [
+	crew_summary.text = "%d night(s), %d change(s) kept.  Score per session (10 per verified bug): [b]%.1f[/b] → [b]%.1f[/b] (champion)" % [
 		_nights.size() - 1, kept.size() - 1, first, best]
+	_load_coach(dir)
 	var t := ""
 	for i in range(_nights.size() - 1, -1, -1):
 		var n: Dictionary = _nights[i]
@@ -867,9 +1118,9 @@ func _load_crew() -> void:
 		if int(n.get("gen", i)) == 0:
 			head += "[color=#8a8f99]starting crew[/color]  mean %.2f" % float(n.get("mean", 0))
 		elif acc:
-			head += "[color=#5fc77a]● kept[/color]  mean %.2f vs champion %.2f" % [float(n.get("mean", 0)), float(n.get("champion_mean", 0))]
+			head += "[bgcolor=#1f6f3a][color=white] ● kept [/color][/bgcolor]  mean %.2f vs champion %.2f%s" % [float(n.get("mean", 0)), float(n.get("champion_mean", 0)), _p_better(n)]
 		elif n.has("mean"):
-			head += "[color=#e8615a]○ rejected[/color]  mean %.2f vs champion %.2f" % [float(n.get("mean", 0)), float(n.get("champion_mean", 0))]
+			head += "[bgcolor=#8a2a26][color=white] ○ rejected [/color][/bgcolor]  mean %.2f vs champion %.2f%s" % [float(n.get("mean", 0)), float(n.get("champion_mean", 0)), _p_better(n)]
 		else:
 			head += "[color=#e8615a]× invalid[/color]"
 		t += head + "\n"
@@ -882,9 +1133,104 @@ func _load_crew() -> void:
 				t += "[color=#8a8f99]%s[/color]\n" % _esc(why)
 		t += "\n"
 	nights_text.text = t
-	_load_heldout(dir)
+	_fill_card(first, best, _load_heldout(dir))
 
-func _load_heldout(dir: String) -> void:
+func _p_better(n: Dictionary) -> String:
+	var st = n.get("stats")
+	if typeof(st) == TYPE_DICTIONARY and st.has("p_better"):
+		return "   P(better) [b]%.2f[/b]" % float(st["p_better"])
+	return ""
+
+func _card_label(text: String, size: int, color: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_font_size_override("font_size", int(size * EditorInterface.get_editor_scale()))
+	l.add_theme_color_override("font_color", color)
+	return l
+
+func _fill_card(first: float, best: float, rows: Array) -> void:
+	# The big "version 0 vs latest" card at the top of the Crew tab (unseen games when available).
+	for c in card_box.get_children():
+		c.queue_free()
+	var dim := _col("font_disabled_color")
+	if first < 0:
+		card_box.add_child(_card_label("Version 0 vs latest", 15, _col("font_color")))
+		card_box.add_child(_card_label("No run loaded yet. Pick a run folder below (e.g. runs/hunt1) and press Load.", 12, dim))
+		return
+	if rows.is_empty():
+		card_box.add_child(_card_label("Version 0 vs latest  (training sessions)", 13, dim))
+		card_box.add_child(_card_line("Training", first, best, null))
+		card_box.add_child(_card_label("No unseen-game eval in this run yet: python -m respawn eval --run <run> --env godot_hunt_heldout", 11, dim))
+		return
+	card_box.add_child(_card_label("Version 0 vs latest on games it never trained on", 13, dim))
+	for row in rows:
+		card_box.add_child(_card_line(str(row[0]), float(row[1]), float(row[2]), row[3]))
+	card_box.add_child(_card_label("bugs found per session (verified by replay), %s unseen session(s) per game" % str(rows[0][3].get("n", "?")), 11, dim))
+
+func _card_line(name: String, a: float, b: float, c) -> Control:
+	var s := EditorInterface.get_editor_scale()
+	var hb := HBoxContainer.new()
+	var n := _card_label(name, 13, _col("font_color"))
+	n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hb.add_child(n)
+	var gain := b - a
+	var col := Color("#5fc77a") if gain > 0 else (Color("#e8615a") if gain < 0 else _col("font_disabled_color"))
+	var nums := _card_label("%.2f → %.2f" % [a / 10.0, b / 10.0], 22, col)
+	nums.autowrap_mode = TextServer.AUTOWRAP_OFF
+	hb.add_child(nums)
+	var extra := "%+.2f" % (gain / 10.0)
+	if c is Dictionary and c.has("p_better"):
+		extra += "\nP %.2f" % float(c["p_better"])
+	var e := _card_label(extra, 11, col)
+	e.autowrap_mode = TextServer.AUTOWRAP_OFF
+	e.custom_minimum_size = Vector2(44, 0) * s
+	hb.add_child(e)
+	return hb
+
+func _load_coach(dir: String) -> void:
+	# The latest night's change, and its playbook as a diff against the champion playbook it was built on.
+	var champ := ""
+	var pb0 := dir.path_join("genomes/gen_000/playbook.md")
+	if FileAccess.file_exists(pb0):
+		champ = FileAccess.get_file_as_string(pb0)
+	var last = null
+	var before := champ
+	for n in _nights:
+		var pr = n.get("proposal")
+		if typeof(pr) != TYPE_DICTIONARY:
+			continue
+		last = n
+		before = champ
+		if n.get("accepted", false) and str(pr.get("playbook", "")) != "":
+			champ = str(pr["playbook"])
+	if last == null:
+		coach_text.text = "[color=#8a8f99]No coach proposals in this run yet.[/color]"
+		return
+	var pr: Dictionary = last["proposal"]
+	var t := "[b]Night %s[/b]  %s\n" % [str(last.get("gen", "?")), "[color=#5fc77a]kept[/color]" if last.get("accepted", false) else "[color=#e8615a]rejected[/color]"]
+	if str(last.get("diagnosis", "")) != "":
+		t += "[color=#8a8f99]Diagnosis:[/color] %s\n" % _esc(str(last["diagnosis"]).left(220) + ("…" if str(last["diagnosis"]).length() > 220 else ""))
+	t += "[color=#8a8f99]Change:[/color] %s\n" % _esc(str(last.get("change", "")).left(400))
+	if last.get("tools", []).size() > 0:
+		t += "[color=#8a8f99]Tools:[/color] %s\n" % ", ".join(last["tools"])
+	var newpb := str(pr.get("playbook", ""))
+	if newpb != "":
+		var old_lines := Array(before.split("\n"))
+		var new_lines := Array(newpb.split("\n"))
+		var diff := ""
+		for l in old_lines:
+			if l.strip_edges() != "" and not new_lines.has(l):
+				diff += "[color=#e8615a]− %s[/color]\n" % _esc(l.strip_edges().trim_prefix("- "))
+		for l in new_lines:
+			if l.strip_edges() != "" and not old_lines.has(l):
+				diff += "[color=#5fc77a]+ %s[/color]\n" % _esc(l.strip_edges().trim_prefix("- "))
+		t += "\n[b]Playbook diff[/b] (vs the champion it was built on)\n" + (diff if diff != "" else "[color=#8a8f99]no playbook lines changed[/color]\n")
+	elif champ != "":
+		t += "\n[b]Champion playbook[/b]\n[color=#8a8f99]%s[/color]\n" % _esc(champ.left(1200))
+	coach_text.text = t
+
+func _load_heldout(dir: String) -> Array:
 	var rows := []
 	for f in DirAccess.get_files_at(dir):
 		if not (f.begins_with("heldout") and f.ends_with(".json")):
@@ -899,7 +1245,7 @@ func _load_heldout(dir: String) -> void:
 		rows.append([HELDOUT_NAMES.get(h.get("env", ""), h.get("env", f)), a, b, c])
 	if rows.is_empty():
 		heldout_text.text = "[color=#8a8f99]No heldout_*.json in this run yet (python -m respawn eval).[/color]"
-		return
+		return rows
 	var t := "[table=5][cell][b]Game[/b]   [/cell][cell][b]v0[/b]   [/cell][cell][b]latest[/b]   [/cell][cell][b]gain[/b]   [/cell][cell][b]P(better)[/b][/cell]"
 	for row in rows:
 		var c: Dictionary = row[3]
@@ -908,6 +1254,7 @@ func _load_heldout(dir: String) -> void:
 			_esc(row[0]), float(row[1]), float(row[2]), "#5fc77a" if gain > 0 else ("#e8615a" if gain < 0 else "#8a8f99"), gain, str(c.get("p_better", "?"))]
 	t += "[/table]\n[color=#8a8f99]%s vs %s, %s unseen session(s) per game[/color]" % [rows[0][3].get("to", ""), rows[0][3].get("from", ""), rows[0][3].get("n", "?")]
 	heldout_text.text = t
+	return rows
 
 func _draw_chart() -> void:
 	var s := EditorInterface.get_editor_scale()
