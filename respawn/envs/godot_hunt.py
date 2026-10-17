@@ -46,6 +46,7 @@ class Oracle:
     def __init__(self, cfg: dict, start_state: dict):
         self.max_air_jumps = int(cfg.get("max_air_jumps", 1))
         self.start_collectibles = start_state.get("collectibles_left", -1)
+        self.start_score = start_state.get("score") or 0  # e.g. a spawn point that lands on a coin
         self.found: dict = {}            # class -> {"frame", "detail"}
         self.air_jumps = 0
         self.prev = start_state.get("player") or {}
@@ -87,7 +88,7 @@ class Oracle:
             return []
         taken = self.start_collectibles - left
         pending = sum(1 for f in self.score_frames if f > frame - 150)  # pickups still animating (~2 s)
-        if sc > taken + pending:
+        if sc - self.start_score > taken + pending:
             return self._hit("dupe", frame, f"score {sc} but only {taken} collectibles were taken")
         return []
 
@@ -205,6 +206,7 @@ Helpers are free for the tester (they take no game time). No file, network or os
             self.oracle.prev = self.state.get("player") or {}
             self.oracle.air_jumps = 0
             self.oracle.start_collectibles = self.state.get("collectibles_left", -1)
+            self.oracle.start_score = self.state.get("score") or 0
             self.oracle.score_frames = []
             self.inputs = []
             self.last = "level restarted"

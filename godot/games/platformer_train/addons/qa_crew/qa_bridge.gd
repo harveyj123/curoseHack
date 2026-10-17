@@ -159,7 +159,9 @@ func _collectibles() -> int:
 	var cls := String(_cfg.get("collectible_class", ""))
 	if cls == "":
 		return -1
-	var arr := _find_all(get_tree().root, func(n): return _class_of(n) == cls and n.is_inside_tree() and not n.is_queued_for_deletion(), [])
+	# A pickup that has switched its Area2D monitoring off is already taken, even while its pickup
+	# animation still runs (or is frozen because the game is paused).
+	var arr := _find_all(get_tree().root, func(n): return _class_of(n) == cls and n.is_inside_tree() and not n.is_queued_for_deletion() and not (n is Area2D and not n.monitoring), [])
 	return arr.size()
 
 func _bounds() -> Dictionary:
@@ -209,6 +211,8 @@ func _body_state(p: Node) -> Dictionary:
 		d["wall"] = p.is_on_wall()
 	if "visible" in p:
 		d["visible"] = p.visible
+	if p.get_script():
+		d["script"] = p.get_script().resource_path
 	return d
 
 func _reset(seed: int) -> Dictionary:
@@ -261,33 +265,67 @@ func _map(cell: int) -> Dictionary:
 		y += cell
 	return {"cell": cell, "left": b["left"], "top": b["top"], "rows": rows}
 
+func _is_solid(h: Dictionary) -> bool:
+	# Solid level geometry only. One-way platforms are excluded: the player legally jumps up through them
+	# and can overlap them, so counting them as walls reports clips in an unmodified game.
+	var c = h.get("collider")
+	if not (c is StaticBody2D or c is TileMap or c is AnimatableBody2D):
+		return false
+	if c is CollisionObject2D:
+		var owner_id: int = c.shape_find_owner(int(h.get("shape", 0)))
+		return not c.is_shape_owner_one_way_collision_enabled(owner_id)
+	if c.has_method("get_coords_for_body_rid"):
+		var coords: Vector2i = c.get_coords_for_body_rid(h["rid"])
+		for layer in c.get_layers_count():
+			var td: TileData = c.get_cell_tile_data(layer, coords)
+			if td:
+				for pl in c.tile_set.get_physics_layers_count():
+					for i in td.get_collision_polygons_count(pl):
+						if td.is_collision_polygon_one_way(pl, i):
+							return false
+	return true
+
 func _tunnel_check(p: Node2D, a: Vector2, b: Vector2) -> Dictionary:
 	# A character body should never pass THROUGH static geometry between two physics frames.
 	if a.distance_to(b) < 0.5 or not (p is CollisionObject2D):
 		return {}
 	var space := p.get_world_2d().direct_space_state
-	var q := PhysicsRayQueryParameters2D.create(a, b, (p as CollisionObject2D).collision_mask, [(p as CollisionObject2D).get_rid()])
-	q.collide_with_areas = false
-	var hit := space.intersect_ray(q)
 	var out := {}
-	if hit and not (hit.collider is CharacterBody2D) and not (hit.collider is RigidBody2D):
-		out["tunnel"] = true
+	var from := a
+	for _i in 4:  # step past one-way platforms the ray hits first
+		var q := PhysicsRayQueryParameters2D.create(from, b, (p as CollisionObject2D).collision_mask, [(p as CollisionObject2D).get_rid()])
+		q.collide_with_areas = false
+		var hit := space.intersect_ray(q)
+		if hit.is_empty() or hit.collider is CharacterBody2D or hit.collider is RigidBody2D:
+			break
+		if _is_solid(hit):
+			out["tunnel"] = true
+			break
+		from = hit.position + (b - a).normalized() * 0.5
+		if from.distance_to(a) >= a.distance_to(b):
+			break
 	var pq := PhysicsPointQueryParameters2D.new()
 	pq.position = b
 	pq.collision_mask = (p as CollisionObject2D).collision_mask
 	pq.exclude = [(p as CollisionObject2D).get_rid()]
 	for h in space.intersect_point(pq, 4):
-		if h.collider is StaticBody2D or h.collider is TileMap or h.collider is AnimatableBody2D:
+		if _is_solid(h):
 			out["inside"] = true
 	return out
 
 func _press(a: String, pressed: bool) -> void:
-	# Real InputEventActions (not just Input.action_press), so _input/_unhandled_input handlers and
-	# button shortcuts see them exactly as they would see a keyboard.
+	# Held state goes through Input.action_press/release, and a real InputEventAction is pushed to the
+	# viewport so _input/_unhandled_input handlers and button shortcuts see it like a keyboard press.
+	# (Input.parse_input_event is avoided: in Godot 4.3 each parsed InputEventAction releases every
+	# other held action, so "move right + jump" would drop the move.)
+	if pressed:
+		Input.action_press(a)
+	else:
+		Input.action_release(a)
 	var ev := InputEventAction.new()
 	ev.action = a
 	ev.pressed = pressed
-	Input.parse_input_event(ev)
+	get_viewport().push_input(ev)
 
 func _act(inputs: Array, capture_every: int = 0, capture_dir: String = "") -> Dictionary:
 	var frames := []
