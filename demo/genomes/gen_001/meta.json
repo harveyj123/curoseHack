@@ -1,6 +1,6 @@
 {
   "gen": 1,
   "parent": "a6ebc8c0ee",
-  "change": "Add a tool that, given the current observation, suggests a focused input sequence to test for infinite_jump (double jump when only one is allowed) and clip (moving into solid geometry), thereby increasing the chance of discovering bugs.",
-  "fingerprint": "a5974c4abd"
+  "change": "Add a tool called bug_explorer that suggests varied input sequences targeting unfound bug classes based on observation and history.",
+  "fingerprint": "f7187d43a1"
 }

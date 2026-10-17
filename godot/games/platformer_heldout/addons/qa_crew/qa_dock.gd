@@ -95,6 +95,14 @@ var card_box := VBoxContainer.new()
 var coach_title: Label
 var coach_text := RichTextLabel.new()
 var nights_title: Label
+var tries_title: Label
+var tries_text := RichTextLabel.new()
+var tools_text := RichTextLabel.new()
+var crew_details := VBoxContainer.new()
+var crew_raw := RichTextLabel.new()
+var code_text := RichTextLabel.new()
+var genome_preview := Label.new()
+var _desc_re := RegEx.create_from_string("\"description\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
 
 var _reports: Array = []
 var _sel := -1
@@ -393,20 +401,40 @@ func _build_crew() -> Control:
 	load_button.pressed.connect(_load_crew)
 	bar.add_child(load_button)
 	root.add_child(bar)
-	root.add_child(_rich(crew_summary))
+	tries_title = _section("What the crew tries")
+	coach_title = tries_title
+	root.add_child(tries_title)
+	root.add_child(_rich(tries_text))
+	root.add_child(_section("Its tools (written by the coach)"))
+	root.add_child(_rich(tools_text))
 	root.add_child(_section("Real bugs found per test run, night by night (practice)"))
-	chart.custom_minimum_size = Vector2(0, 180) * s
+	chart.custom_minimum_size = Vector2(0, 170) * s
 	chart.draw.connect(_draw_chart)
 	chart.resized.connect(chart.queue_redraw)
 	root.add_child(chart)
-	root.add_child(_section("New games: starting crew vs trained crew"))
-	root.add_child(_rich(heldout_text))
-	coach_title = _section("Coach: latest change the gate kept")
-	root.add_child(coach_title)
-	root.add_child(_rich(coach_text))
-	nights_title = _section("Gate: every night's verdict")
+	nights_title = _section("Night by night")
 	root.add_child(nights_title)
 	root.add_child(_rich(nights_text))
+	var toggle := Button.new()
+	toggle.text = "▸ Details for AI agents"
+	toggle.flat = true
+	toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	toggle.tooltip_text = "Raw genome (meta, roles), scores per session, P(better) and CI, held-out table, tool code and playbook diff"
+	toggle.pressed.connect(func():
+		crew_details.visible = not crew_details.visible
+		toggle.text = ("▾ " if crew_details.visible else "▸ ") + "Details for AI agents")
+	root.add_child(toggle)
+	crew_details.visible = false
+	root.add_child(crew_details)
+	crew_details.add_child(_rich(crew_summary))
+	crew_details.add_child(_section("Held-out evaluation"))
+	crew_details.add_child(_rich(heldout_text))
+	crew_details.add_child(_section("Latest kept change: playbook diff"))
+	crew_details.add_child(_rich(coach_text))
+	crew_details.add_child(_section("Champion genome"))
+	crew_details.add_child(_rich(crew_raw))
+	crew_details.add_child(_section("Every night: verdict stats and tool code"))
+	crew_details.add_child(_rich(code_text))
 	return scroll
 
 func _build_run() -> Control:
@@ -426,6 +454,12 @@ func _build_run() -> Control:
 	_add_row(root, "Crew genome", genome_edit)
 	genome_edit.placeholder_text = "empty = newest trained crew; none = untrained"
 	genome_edit.text = es.get_setting(GENOME_SETTING) if es.has_setting(GENOME_SETTING) else ""
+	genome_preview.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	genome_preview.add_theme_color_override("font_color", _col("font_disabled_color"))
+	genome_preview.add_theme_font_size_override("font_size", int(12 * EditorInterface.get_editor_scale()))
+	root.add_child(genome_preview)
+	genome_edit.text_changed.connect(func(_t): _update_genome_preview())
+	_update_genome_preview.call_deferred()
 	_add_row(root, "Sessions (seeds)", seeds_edit)
 	seeds_edit.text = "0-3"
 	watch_check.text = "Watch live (first session plays in a game window)"
@@ -546,6 +580,17 @@ func _exit_tree() -> void:
 	_jobs.clear()
 
 # ------------------------------------------------------------------ Run tab
+func _update_genome_preview() -> void:
+	var g := genome_edit.text.strip_edges()
+	if g == "none":
+		genome_preview.text = _genome_summary("")
+		return
+	if g == "":
+		g = _newest_demo_genome()
+	if g != "" and not g.is_absolute_path():
+		g = repo_edit.text.path_join(g)
+	genome_preview.text = _genome_summary(g)
+
 func _newest_demo_genome() -> String:
 	# The trained crew shipped with the repo (demo/genomes/gen_NNN), so a fresh checkout hunts with it by default.
 	var names := Array(DirAccess.get_directories_at(repo_edit.text.path_join("demo/genomes")))
@@ -1386,27 +1431,39 @@ func _load_crew() -> void:
 	_nights.clear()
 	var dir := _run_path()
 	var lp := dir.path_join("lineage.jsonl")
+	var superseded := 0
 	if FileAccess.file_exists(lp):
 		for line in FileAccess.get_file_as_string(lp).split("\n", false):
 			var d = JSON.parse_string(line)
-			if typeof(d) == TYPE_DICTIONARY:
-				_nights.append(d)
+			if typeof(d) != TYPE_DICTIONARY:
+				continue
+			# A resumed run repeats night numbers: the later entry supersedes the earlier attempts.
+			var g := int(d.get("gen", 0))
+			while _nights.size() > 0 and int(_nights[-1].get("gen", 0)) >= g:
+				_nights.pop_back()
+				superseded += 1
+			_nights.append(d)
 	chart.queue_redraw()
 	if _nights.is_empty():
-		crew_summary.text = "[color=#8a8f99]Nothing to show yet: %s has no training history (lineage.jsonl). Set Run folder to demo or to a training run and press Load.[/color]" % _esc(dir)
-		nights_text.text = ""
-		heldout_text.text = ""
-		coach_text.text = ""
-		_fill_card(-1.0, -1.0, [])
+		var none := "[color=#8a8f99]Nothing to show yet: %s has no training history (lineage.jsonl). Set Run folder to demo (or demo/run1, or a training run) and press Load.[/color]" % _esc(dir)
+		tries_text.text = none
+		for r in [crew_summary, nights_text, heldout_text, coach_text, tools_text, crew_raw, code_text]:
+			r.text = ""
+		_fill_card(-1.0, -1.0, [], 0)
 		return
 	var kept := _nights.filter(func(n): return n.get("accepted", false))
 	var first: float = float(_nights[0].get("mean", 0))
 	var best: float = float(kept[-1].get("mean", 0)) if kept.size() > 0 else first
-	crew_summary.text = "%d night(s) of practice, %d change(s) kept. Real bugs found per test run while practicing: [b]%.2f[/b] → [b]%.2f[/b]" % [
-		_nights.size() - 1, kept.size() - 1, first / 10.0, best / 10.0]
+	crew_summary.text = "%d night(s), %d change(s) kept, training mean %.2f → %.2f points per session (10 per verified bug)%s" % [
+		_nights.size() - 1, kept.size() - 1, first, best, (", %d superseded attempt(s) from a restart not shown" % superseded) if superseded > 0 else ""]
 	_load_coach(dir)
-	var t := ""
 	var gdirs := _genome_dirs(dir)
+	var champ_dir: String = gdirs.get(str(kept[-1].get("fingerprint", "")), "") if kept.size() > 0 else ""
+	if champ_dir == "":
+		champ_dir = dir.path_join("genomes/gen_000")
+	_load_genome_plain(champ_dir, kept[-1] if kept.size() > 0 else {})
+	_load_nights_plain(dir, gdirs)
+	var t := ""
 	for i in range(_nights.size() - 1, -1, -1):
 		var n: Dictionary = _nights[i]
 		var acc: bool = n.get("accepted", false)
@@ -1429,8 +1486,8 @@ func _load_crew() -> void:
 				t += "[color=#8a8f99]%s[/color]\n" % _esc(why)
 			t += _tool_code(dir, n, gdirs)
 		t += "\n"
-	nights_text.text = t
-	_fill_card(first, best, _load_heldout(dir))
+	code_text.text = t
+	_fill_card(first, best, _load_heldout(dir), kept.size() - 1)
 
 func _genome_dirs(dir: String) -> Dictionary:
 	# fingerprint -> genome folder, for kept genomes (genomes/) and rejected candidates (rejected/)
@@ -1475,6 +1532,88 @@ func _tool_code(dir: String, n: Dictionary, gdirs: Dictionary) -> String:
 		t += "[bgcolor=#00000055][code]%s[/code][/bgcolor]\n" % _esc(shown)
 	return t
 
+func _tool_desc(src: String) -> String:
+	var m := _desc_re.search(src)
+	if m == null:
+		return ""
+	var d := m.get_string(1).replace("\\\"", "\"").strip_edges().trim_suffix(".")
+	return d.left(1).to_lower() + d.substr(1) if d.length() > 1 and d.substr(1, 1) == d.substr(1, 1).to_lower() else d
+
+func _tools_plain(gdir: String) -> Array:
+	var out := []
+	var tf := _tool_files(gdir)
+	for f in tf:
+		var d := _tool_desc(str(tf[f]))
+		out.append("%s: %s" % [f.trim_suffix(".py"), d if d != "" else "a helper the coach wrote"])
+	return out
+
+func _playbook_bullets(md: String, limit := 6) -> Array:
+	var out := []
+	for line in md.split("\n"):
+		var l := line.strip_edges()
+		if l.begins_with("- ") or l.begins_with("* "):
+			out.append(l.substr(2).replace("**", "").replace("`", ""))
+	if out.size() > limit:
+		out = out.slice(0, limit) + ["… and %d more" % (out.size() - limit)]
+	return out
+
+func _genome_summary(gdir: String) -> String:
+	# One plain line for a genome folder (also used by the Run tab's genome preview).
+	if gdir == "" or not DirAccess.dir_exists_absolute(gdir):
+		return "Untrained crew: plays from the default playbook, no tools."
+	var tools := _tools_plain(gdir)
+	var pb := _playbook_bullets(FileAccess.get_file_as_string(gdir.path_join("playbook.md")) if FileAccess.file_exists(gdir.path_join("playbook.md")) else "", 99)
+	var ver := gdir.get_file().trim_prefix("gen_").lstrip("0")
+	var t := "Crew version %s: " % (ver if ver != "" else "0")
+	t += ("uses " + "; ".join(tools)) if tools.size() > 0 else "no tools"
+	t += ", and a playbook of %d tip(s)." % pb.size()
+	return t
+
+func _load_genome_plain(gdir: String, kept_night: Dictionary) -> void:
+	var pbp := gdir.path_join("playbook.md")
+	var bullets := _playbook_bullets(FileAccess.get_file_as_string(pbp) if FileAccess.file_exists(pbp) else "")
+	var t := ""
+	for b in bullets:
+		t += "• %s\n" % _esc(b)
+	tries_text.text = t if t != "" else "[color=#8a8f99]No playbook in %s.[/color]" % _esc(gdir)
+	var tl := ""
+	for x in _tools_plain(gdir):
+		tl += "• %s\n" % _esc(x)
+	tools_text.text = tl if tl != "" else "[color=#8a8f99]No tools yet: the crew plays from its playbook only.[/color]"
+	var raw := "[code]%s[/code]\n" % _esc(gdir)
+	for f in ["meta.json", "roles.json"]:
+		if FileAccess.file_exists(gdir.path_join(f)):
+			raw += "[b]%s[/b]\n[code]%s[/code]\n" % [f, _esc(FileAccess.get_file_as_string(gdir.path_join(f)).strip_edges())]
+	if kept_night.has("scores"):
+		raw += "[b]scores per session[/b]\n[code]%s[/code]\n" % _esc(JSON.stringify(kept_night["scores"]))
+	crew_raw.text = raw
+
+func _load_nights_plain(dir: String, gdirs: Dictionary) -> void:
+	var t := ""
+	for i in range(_nights.size() - 1, -1, -1):
+		var n: Dictionary = _nights[i]
+		var g := int(n.get("gen", i))
+		if g == 0:
+			t += "[b]Night 0[/b]: the starting crew found %.2f real bugs per test run.\n" % (float(n.get("mean", 0)) / 10.0)
+			continue
+		if n.get("accepted", false):
+			var what := "changed its playbook"
+			var gd: String = gdirs.get(str(n.get("fingerprint", "")), "")
+			var parent := _tool_files(gdirs.get(str(n.get("parent", "")), ""))
+			var mine := _tool_files(gd)
+			for f in mine:
+				if parent.get(f, "") != mine[f]:
+					var d := _tool_desc(str(mine[f]))
+					what = "wrote a tool, %s, that will %s" % [f.trim_suffix(".py"), d if d != "" else "help the testers"] if not parent.has(f) else "improved its tool %s" % f.trim_suffix(".py")
+					break
+			t += "[b]Night %d[/b]: [color=#5fc77a]kept[/color], found more bugs (%.2f vs %.2f per test run). The coach %s.\n" % [
+				g, float(n.get("mean", 0)) / 10.0, float(n.get("champion_mean", 0)) / 10.0, _esc(what)]
+		elif n.has("mean"):
+			t += "[b]Night %d[/b]: [color=#8a8f99]blocked, no gain.[/color]\n" % g
+		else:
+			t += "[b]Night %d[/b]: [color=#8a8f99]blocked, the coach's change failed its own test.[/color]\n" % g
+	nights_text.text = t
+
 func _p_better(n: Dictionary) -> String:
 	var st = n.get("stats")
 	if typeof(st) == TYPE_DICTIONARY and st.has("p_better"):
@@ -1489,27 +1628,44 @@ func _card_label(text: String, size: int, color: Color) -> Label:
 	l.add_theme_color_override("font_color", color)
 	return l
 
-func _fill_card(first: float, best: float, rows: Array) -> void:
-	# The big "version 0 vs latest" card at the top of the Crew tab (unseen games when available).
+func _fill_card(first: float, best: float, rows: Array, version: int) -> void:
+	# The big card at the top of the Crew tab: the plain headline, then unseen games when available.
 	for c in card_box.get_children():
 		c.queue_free()
 	var dim := _col("font_disabled_color")
+	if first >= 0:
+		var head := "Your crew is on version %d. " % version
+		if version == 0:
+			head += "No change has been kept yet; it finds %.2f real bugs per test run." % (best / 10.0)
+		elif best > first:
+			head += "It now finds %.2f real bugs per test run, up from %.2f." % [best / 10.0, first / 10.0]
+		else:
+			head += "It finds %.2f real bugs per test run, was %.2f." % [best / 10.0, first / 10.0]
+		card_box.add_child(_card_label(head, 16, _col("font_color")))
+		var sub := ""
+		for row in rows:
+			var a := float(row[1]) / 10.0
+			var b := float(row[2]) / 10.0
+			var how := ("up from %.2f" % a) if b > a else (("down from %.2f" % a) if b < a else "the same as before")
+			sub += "On %s, which it never practiced on: %.2f per test run, %s.\n" % [str(row[0]), b, how]
+		if rows.is_empty():
+			sub = "Not yet tested on games it never practiced on."
+		card_box.add_child(_card_label(sub.strip_edges(), 12, dim))
 	if first < 0:
 		card_box.add_child(_card_label("Starting crew vs trained crew", 15, _col("font_color")))
 		card_box.add_child(_card_label("No run loaded yet. Pick a run folder below (demo, or an evolution run such as runs/hunt1) and press Load. This card then shows how many real bugs the starting crew and the trained crew find per test run, on games they never practiced on.", 12, dim))
 		return
 	if rows.is_empty():
-		card_box.add_child(_card_label("Starting crew vs trained crew (practice games only)", 13, dim))
-		card_box.add_child(_card_line("Training", first, best, null))
-		card_box.add_child(_card_label("Real bugs found per test run. The real test is games the crew never practiced on: run python -m respawn eval --run <run> --env godot_hunt_heldout and the results appear here.", 11, dim))
+		card_box.add_child(_card_line("Practice games", first, best, null))
+		card_box.add_child(_card_label("Unseen-game results appear here once the run has heldout_*.json files (python -m respawn eval).", 11, dim))
 		return
-	card_box.add_child(_card_label("Starting crew vs trained crew, on games they never practiced on", 13, dim))
+	card_box.add_child(_card_line("Practice games", first, best, null))
 	for row in rows:
 		card_box.add_child(_card_line(str(row[0]), float(row[1]), float(row[2]), row[3]))
 	var better := 0
 	for row in rows:
 		better += 1 if float(row[2]) > float(row[1]) else 0
-	card_box.add_child(_card_label("Real bugs found per test run (each proven by a replay), %s test runs per game." % str(rows[0][3].get("n", "?")), 11, dim))
+	card_box.add_child(_card_label("Real bugs found per test run (each proven by a replay), starting crew → trained crew, %s test runs per game." % str(rows[0][3].get("n", "?")), 11, dim))
 	if better == 0:
 		card_box.add_child(_card_label("The trained crew did not do better on these new games: what it learned did not carry over.", 12, Color("#e0a040")))
 

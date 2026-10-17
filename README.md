@@ -77,7 +77,9 @@ back into the next prompt, so each round proposes kinds of rules the developer h
     the repro headless: green *Fixed* or red *Still reproduces*.
   - **Rules**: the game's house rules: add, enable/disable, delete, **Compile with Nemotron**, and review
     each rule's compiled check.
-  - **Crew**: how the crew learned, from a run's files alone: a big version 0 vs latest card (unseen games
+  - **Crew**: how the crew learned, in plain words first ("Your crew is on version 1. It now finds 1.42 real bugs
+    per test run, up from 0.25", what it tries, its tools, night by night), with the raw genome, stats, tool code and
+    playbook diff under **Details for AI agents**. Built from a run's files alone: a big version 0 vs latest card (unseen games
     when `heldout_*.json` exist), the coach's latest change with its playbook diff, and from `lineage.jsonl` score per night (filled dots = kept
     changes on the champion line, hollow = rejected candidates), each night's change and kept/rejected verdict with P(better), the tool code the coach wrote that night
     ("Night 1: the coach wrote tools/bug_hunter.py", diffed against the parent genome), and
@@ -153,7 +155,7 @@ python -m respawn eval --run runs/hunt1 --env godot_hunt_heldout --seeds 100-107
 python -m respawn eval --run runs/hunt1 --env godot_hunt_dodge --seeds 100-107
 
 # file fix-ready reports with the best crew, then verify a fix
-python -m respawn.qa hunt --project godot/games/platformer_heldout --genome runs/hunt1/genomes/gen_00N --seeds 0-3
+python -m respawn.qa hunt --project godot/games/platformer_heldout --genome demo/genomes/gen_001 --seeds 0-3
 python -m respawn.qa check qa_reports/<id>.json
 ```
 
@@ -161,7 +163,13 @@ python -m respawn.qa check qa_reports/<id>.json
 
 ## Results
 
-Run 1 (`demo/lineage.jsonl`, 6 nights, 8 paired training sessions per night, score = 10 per verified bug):
+Run 2 is the shipped demo crew (`demo/lineage.jsonl`, `demo/genomes/`; copied from `runs/hunt2`, 12 paired
+sessions per night): on night 1 the coach wrote `tools/bug_explorer.py` (picks input sequences aimed at the bug
+classes not found yet) and the gatekeeper kept it, training score 2.5 -> 14.2 points per session (11 wins, 0
+losses, 1 tie on the paired sessions, P(better) 1.00). Two earlier night-1/2 attempts failed their own tool tests
+before a restart. Held-out results for run 2 go in `demo/heldout_*.json` when its evaluation finishes.
+
+Run 1 (kept for honesty in `demo/run1/`: lineage, genomes and held-out files; 6 nights, 8 paired training sessions per night, score = 10 per verified bug):
 
 - Night 0 (untrained crew): 0.0 per session on training bug set A.
 - Night 1 **kept**: the coach wrote `tools/bug_hunter.py` (shown in the dock's Crew tab); training score 0.0 -> 2.5, P(better) 0.90.
