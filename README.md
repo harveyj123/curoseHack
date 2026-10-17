@@ -51,9 +51,14 @@ Bug classes the oracle confirms: `crash` (GDScript error), `clip` (through/insid
     version 0 vs latest on unseen games when `heldout_*.json` files exist.
   - **Run**: Crusoe API key, crew folder, Python, genome and seeds, **Run QA crew** and a live log. When
     the run finishes the dock switches to Bugs.
+  - **Watch live** (Run tab checkbox, or `python -m respawn.qa hunt --watch`): the first session plays in a
+    visible game window at real time, captioned with the hunter's move, its reasoning and the bugs found so far;
+    its moves also stream into the log in blue. Other sessions stay headless, and traces match a headless run.
+    Try it offline: `python -m respawn.qa hunt --project godot/games/platformer_heldout --seeds 0 --mock --watch`.
 
 ![QA Crew dock, Bugs tab](docs/dock_bugs.png)
 ![QA Crew dock, Crew tab](docs/dock_crew.png)
+![Watch live: a hunter playing with its caption bar](docs/watch_live.png)
 - Optional `res://qa_crew.json` per game: player class, score location, collectibles, bounds, spawn
   points, key letters. Without it the crew guesses from the InputMap.
 

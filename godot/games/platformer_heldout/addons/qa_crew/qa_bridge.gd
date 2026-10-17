@@ -8,12 +8,17 @@
 #        -> per-frame trace (position, velocity, floor, tunnelling, overlap), events, final state
 #   {"cmd":"reset","seed":3}                         -> reload the main scene, apply a spawn for the seed
 #   {"cmd":"screenshot","path":"/tmp/x.png"}         -> save the viewport (needs a display, e.g. xvfb)
+#   {"cmd":"say","text":"Hunter · play R30"}          -> show a caption bar at the top of the window
 #   {"cmd":"quit"}
 # Run with `--fixed-fps 60` so every physics frame is exactly 1/60 s: a run is then fully
 # described by (seed, inputs) and replays identically.
 #
 # Optional per-game config at res://qa_crew.json (see README): which node is the player, where the
 # score lives, which nodes are collectibles, level bounds, spawn points, and allowed air jumps.
+#
+# `-- --qa-watch` (with a window) is for people watching a hunt live: `act` runs at real time and the
+# window keeps redrawing while the engine is frozen between commands. Physics stepping is unchanged,
+# so traces are identical to a headless run.
 extends Node
 
 var _server := TCPServer.new()
@@ -25,6 +30,8 @@ var _frame := 0
 var _seed := 0
 var _pending_spawn = null
 var _hud: Label = null
+var _watch := false
+var _caption: Label = null
 
 # Written by the editor dock's "Replay in game" button; played once at real-time speed, then deleted.
 const REPLAY_FILE := "res://qa_reports/.replay.json"
@@ -35,6 +42,8 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--qa-port="):
 			port = int(a.split("=")[1])
+		elif a == "--qa-watch":
+			_watch = DisplayServer.get_name() != "headless"
 	if port == 0:
 		set_process(false)
 		if FileAccess.file_exists(REPLAY_FILE) and DisplayServer.get_name() != "headless":
@@ -42,6 +51,8 @@ func _ready() -> void:
 			_replay.call_deferred()
 		return
 	_load_cfg()
+	if _watch:
+		Engine.max_fps = Engine.physics_ticks_per_second  # one physics frame per drawn frame: real time
 	var err := _server.listen(port, "127.0.0.1")
 	print("QA_BRIDGE listening on %d (err %d)" % [port, err])
 	get_tree().node_added.connect(_on_node_added)
@@ -92,8 +103,14 @@ func _process(_delta: float) -> void:
 		# Freeze the whole engine while the crew is thinking: no frames advance between commands,
 		# so a run is exactly reproducible from its command sequence.
 		var t0 := Time.get_ticks_msec()
+		var drawn := t0
 		while n == 0 and Time.get_ticks_msec() - t0 < 20000:
 			OS.delay_msec(1)
+			if _watch and Time.get_ticks_msec() - drawn >= 33:
+				# Watched window: keep it responsive and redrawn (~30 Hz) without advancing any frame.
+				drawn = Time.get_ticks_msec()
+				DisplayServer.process_events()
+				RenderingServer.force_draw()
 			_peer.poll()
 			if _peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
 				_peer = null
@@ -142,10 +159,38 @@ func _dispatch(msg: Dictionary):
 			var p := String(msg.get("path", "user://qa_shot.png"))
 			img.save_png(p)
 			return {"path": p, "size": [img.get_width(), img.get_height()]}
+		"say":
+			_say(String(msg.get("text", "")))
+			return "ok"
 		"quit":
 			get_tree().quit()
 			return "bye"
 	return {"error": "unknown cmd"}
+
+func _say(text: String) -> void:
+	# Caption bar for watched runs. Lives under the bridge (survives scene reloads), ignores the mouse.
+	if _caption == null:
+		var layer := CanvasLayer.new()
+		layer.layer = 128
+		add_child(layer)
+		var bar := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0, 0, 0, 0.65)
+		sb.content_margin_left = 10
+		sb.content_margin_right = 10
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
+		bar.add_theme_stylebox_override("panel", sb)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+		layer.add_child(bar)
+		_caption = Label.new()
+		_caption.add_theme_color_override("font_color", Color.WHITE)
+		_caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.add_child(_caption)
+	_caption.text = text
+	_caption.get_parent().visible = text != ""
 
 # ------------------------------------------------------------------ discovery helpers
 func _player() -> Node:

@@ -9,6 +9,7 @@ const REPO_SETTING := "qa_crew/crew_path"
 const GENOME_SETTING := "qa_crew/crew_genome"
 const RUNDIR_SETTING := "qa_crew/run_folder"
 const PYTHON_SETTING := "qa_crew/python"
+const WATCH_SETTING := "qa_crew/watch_live"
 const REPORTS := "res://qa_reports"
 const REPLAY_FILE := "res://qa_reports/.replay.json"
 const GD_REF := "res://[\\w./-]+\\.gd(?::(\\d+))?"
@@ -21,6 +22,7 @@ var repo_edit := LineEdit.new()
 var genome_edit := LineEdit.new()
 var python_edit := LineEdit.new()
 var seeds_edit := LineEdit.new()
+var watch_check := CheckBox.new()
 var run_button := Button.new()
 var output := RichTextLabel.new()
 # Bugs tab
@@ -200,6 +202,9 @@ func _build_run() -> Control:
 	genome_edit.text = es.get_setting(GENOME_SETTING) if es.has_setting(GENOME_SETTING) else ""
 	_add_row(root, "Sessions (seeds)", seeds_edit)
 	seeds_edit.text = "0-3"
+	watch_check.text = "Watch live (first session plays in a game window)"
+	watch_check.button_pressed = es.get_setting(WATCH_SETTING) if es.has_setting(WATCH_SETTING) else false
+	root.add_child(watch_check)
 	run_button.text = "Run QA crew"
 	run_button.pressed.connect(_on_run)
 	root.add_child(run_button)
@@ -244,7 +249,8 @@ func _esc(t) -> String:
 
 # ------------------------------------------------------------------ subprocesses (read on a thread: pipes block)
 func _spawn(argv: PackedStringArray, on_line: Callable, on_exit: Callable):
-	var env := PackedStringArray(["PYTHONPATH=" + repo_edit.text, "PYTHONUNBUFFERED=1"])
+	# GODOT_BIN: run the games with this editor's own binary (the crew's default path is Linux-only).
+	var env := PackedStringArray(["PYTHONPATH=" + repo_edit.text, "PYTHONUNBUFFERED=1", "GODOT_BIN=" + OS.get_executable_path()])
 	var res := OS.execute_with_pipe("sh", PackedStringArray(["-c", "exec \"$@\" 2>&1", "sh", "env"]) + env + argv)
 	if res.is_empty():
 		return null
@@ -295,6 +301,7 @@ func _on_run() -> void:
 	es.set_setting(REPO_SETTING, repo_edit.text)
 	es.set_setting(GENOME_SETTING, genome_edit.text)
 	es.set_setting(PYTHON_SETTING, python_edit.text)
+	es.set_setting(WATCH_SETTING, watch_check.button_pressed)
 	if key_edit.text.strip_edges() == "" or repo_edit.text.strip_edges() == "":
 		output.append_text("[color=orange]Set the Crusoe API key and the crew folder first.[/color]\n")
 		return
@@ -307,6 +314,8 @@ func _on_run() -> void:
 		if not g.is_absolute_path():
 			g = repo_edit.text.path_join(g)
 		args.append_array(["--genome", g])
+	if watch_check.button_pressed:
+		args.append("--watch")
 	_run_job = _spawn(args, _show, _run_done)
 	if _run_job == null:
 		output.append_text("[color=red]Could not start %s.[/color]\n" % _esc(_python()))
@@ -327,6 +336,8 @@ func _show(line: String) -> void:
 		var id := line.get_slice("-> ", 1).strip_edges()
 		var path := ProjectSettings.globalize_path("res://qa_reports/" + id)
 		output.append_text("[color=tomato]BUG[/color] %s  [url=%s]report[/url]\n" % [_esc(line.get_slice("  repro", 0)), path])
+	elif line.begins_with("LIVE "):  # a watched hunter's move (respawn.qa hunt --watch)
+		output.append_text("[color=#5ec8e5]%s[/color]\n" % _esc(line.substr(5)))
 	else:
 		output.append_text(_esc(line) + "\n")
 

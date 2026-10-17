@@ -32,17 +32,19 @@ def free_port() -> int:
 class GodotGame:
     """One running game process. Script errors printed by Godot are collected as crash evidence."""
 
-    def __init__(self, project: str, headless: bool = True, timeout: float = 60.0):
+    def __init__(self, project: str, headless: bool = True, timeout: float = 60.0, watch: bool = False):
+        """watch=True: a visible window that plays at real time and shows `say` captions (judges watching)."""
         self.project = os.path.abspath(project)
         self.port = free_port()
         args = [GODOT, "--path", self.project, "--fixed-fps", "60", "--audio-driver", "Dummy"]
+        headless = headless and not watch
         if headless:
             args.insert(1, "--headless")
         else:  # rendered (for screenshots / GIF evidence) on a virtual display
             args += ["--rendering-driver", "opengl3"]
             if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
                 args = ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"] + args
-        args += ["--", f"--qa-port={self.port}"]
+        args += ["--", f"--qa-port={self.port}"] + (["--qa-watch"] if watch else [])
         env = dict(os.environ)
         self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, bufsize=1)
         self.errors: list[dict] = []

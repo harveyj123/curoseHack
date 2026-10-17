@@ -222,11 +222,12 @@ def check(path: str) -> int:
     return 1 if still else 0
 
 
-def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, players: list, evidence=True) -> list:
+def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, players: list, evidence=True,
+         watch=False, mock=False) -> list:
     from respawn import env as envmod
     from respawn.genome import Genome
-    from respawn.harness import run_many
-    from respawn.llm import LLM
+    from respawn.harness import run_episode, run_many
+    from respawn.llm import LIGHTNING, LLM, NANO, SUPER
     project = os.path.abspath(project)
     name = {"platformer_train": "godot_hunt", "platformer_heldout": "godot_hunt_heldout", "dodge_heldout": "godot_hunt_dodge"}.get(
         os.path.basename(os.path.normpath(project)))
@@ -237,7 +238,16 @@ def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, player
     envmod.get(name)
     os.makedirs(out_dir, exist_ok=True)
     g = Genome.load(genome_dir) if genome_dir else Genome()
-    eps = run_many(LLM(), name, seeds, g, players, parallel=min(4, len(seeds)))
+    llm = LLM(mock=mock or None)
+    if watch:  # the first seed plays in a visible real-time window with captions; the rest stay headless
+        from concurrent.futures import ThreadPoolExecutor
+        short = {NANO: "Nano", LIGHTNING: "Lightning", SUPER: "Super"}
+        label = "Hunter " + short.get(players[seeds[0] % len(players)], players[seeds[0] % len(players)].split("/")[-1])
+        kw = lambda s: {"watch": True, "watch_label": label} if s == seeds[0] else {}
+        with ThreadPoolExecutor(min(4, len(seeds))) as ex:
+            eps = list(ex.map(lambda s: run_episode(llm, name, s, g, players, env_kwargs=kw(s)), seeds))
+    else:
+        eps = run_many(llm, name, seeds, g, players, parallel=min(4, len(seeds)))
     seen, reports = set(), []
     for ep in eps:
         for f in ep.outcome.get("findings", []):
@@ -264,12 +274,14 @@ def main(argv=None):
     h.add_argument("--out", default="qa_reports")
     h.add_argument("--players", default=f"{NANO},{LIGHTNING}")
     h.add_argument("--no-evidence", action="store_true")
+    h.add_argument("--watch", action="store_true", help="first session plays in a visible, captioned, real-time game window")
+    h.add_argument("--mock", action="store_true", help="offline: scripted hunter, no API calls")
     c = sub.add_parser("check")
     c.add_argument("report")
     a = ap.parse_args(argv)
     if a.cmd == "check":
         return check(a.report)
-    hunt(a.project, a.genome, parse_seeds(a.seeds), a.out, a.players.split(","), not a.no_evidence)
+    hunt(a.project, a.genome, parse_seeds(a.seeds), a.out, a.players.split(","), not a.no_evidence, a.watch, a.mock)
     return 0
 
 

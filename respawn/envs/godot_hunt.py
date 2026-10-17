@@ -100,9 +100,12 @@ class GodotHuntEnv:
     project = "platformer_train"
     default_action = ("wait", {})
 
-    def __init__(self, seed: int, tools: dict | None = None, record: bool = False, **_kw):
+    def __init__(self, seed: int, tools: dict | None = None, record: bool = False, watch: bool = False,
+                 watch_label: str = "Hunter", **_kw):
         self.seed = seed
-        self.game = GodotGame(os.path.join(ROOT, self.project))
+        self.watch, self.watch_label = watch, watch_label  # watch: visible real-time window with captions
+        self.note = ""                   # the agent's reasoning for its next action (set by the harness)
+        self.game = GodotGame(os.path.join(ROOT, self.project), watch=watch)
         self.cfg = self.game.info.get("config") or {}
         self.controls = {k: v for k, v in (self.cfg.get("letters") or {}).items()}
         if not self.controls:  # no qa_crew.json: guess from the game's InputMap
@@ -199,8 +202,22 @@ Helpers are free for the tester (they take no game time). No file, network or os
                 f"Bounds: {self.state.get('bounds')}. Score {self.state.get('score')}, collectibles left {self.state.get('collectibles_left')}.\n"
                 f"Plays left: {self.max_decisions - self.plays}. Bugs confirmed so far: {found}.\nLast result: {self.last}")
 
+    def _live(self, what: str, extra: str = "") -> None:
+        """Watch mode: caption the game window and stream the move to stdout (the editor dock shows LIVE lines)."""
+        if not self.watch:
+            return
+        line = f"{self.watch_label} · {what} · bugs: {', '.join(sorted(self.oracle.found)) or 'none yet'}" + extra
+        why = " ".join(self.note.split())
+        why = why[:140] + ("…" if len(why) > 140 else "")
+        print("LIVE " + line + (f"  ({why})" if why else ""), flush=True)
+        try:
+            self.game.call("say", text=line + (f"\n{why}" if why else ""))
+        except Exception:
+            pass
+
     def act(self, agent, name, args):
         self.plays += 1
+        self._live(f"play {args.get('inputs', '')}" if name == "play" else name)
         if name == "reset":
             self.state = self.game.call("reset", seed=self.seed)
             self.oracle.prev = self.state.get("player") or {}
@@ -243,6 +260,8 @@ Helpers are free for the tester (they take no game time). No file, network or os
                      + (f" CONSOLE: {err_txt}." if err_txt else "")
                      + (f" NEW BUG CONFIRMED: {', '.join(new)}." if new else ""))
         self.trail.append({"inputs": args.get("inputs", ""), "summary": self.last[:300]})
+        if new:
+            self._live(f"play {args.get('inputs', '')}", f" · NEW BUG: {', '.join(new)}")
         return self.last
 
     @property
@@ -285,6 +304,7 @@ Helpers are free for the tester (they take no game time). No file, network or os
             script.insert(0, "L120 LJ20 W1 LJ20 W1 LJ20 W1 LJ20 W1 LJ20 W1 LJ20")
         if "shoot" in pb:
             script.insert(0, "W40 J20 W1 J5 S5")
+        self.note = f"(mock) scripted probe {self.plays % len(script) + 1}/{len(script)}: run, jump at walls, look for clips"
         return "play", {"inputs": script[self.plays % len(script)]}
 
     @staticmethod
