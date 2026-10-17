@@ -464,7 +464,7 @@ def main(argv=None):
     h.add_argument("--genome")
     h.add_argument("--seeds", default="0-3")
     h.add_argument("--out", default="qa_reports")
-    h.add_argument("--players", default=f"{NANO},{LIGHTNING}")
+    h.add_argument("--players", default=os.environ.get("QA_PLAYERS") or f"{NANO},{LIGHTNING}")  # QA_PLAYERS: the dock's default crew models
     h.add_argument("--no-evidence", action="store_true")
     h.add_argument("--watch", action="store_true", help="first session plays in a visible, captioned, real-time game window")
     h.add_argument("--mock", action="store_true", help="offline: scripted hunter, no API calls")

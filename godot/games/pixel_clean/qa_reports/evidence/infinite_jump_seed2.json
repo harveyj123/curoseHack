@@ -1,0 +1,80 @@
+{
+ "class": "infinite_jump",
+ "seed": 2,
+ "inputs": [
+  [
+   {
+    "hold": [
+     "ui_right",
+     "ui_up"
+    ],
+    "frames": 20
+   }
+  ],
+  [
+   {
+    "hold": [
+     "ui_right"
+    ],
+    "frames": 30
+   },
+   {
+    "hold": [],
+    "frames": 5
+   },
+   {
+    "hold": [
+     "ui_up"
+    ],
+    "frames": 2
+   }
+  ],
+  [
+   {
+    "hold": [
+     "ui_right"
+    ],
+    "frames": 20
+   },
+   {
+    "hold": [
+     "ui_right",
+     "ui_up"
+    ],
+    "frames": 2
+   }
+  ],
+  [
+   {
+    "hold": [
+     "ui_up"
+    ],
+    "frames": 10
+   }
+  ],
+  [
+   {
+    "hold": [
+     "ui_up"
+    ],
+    "frames": 10
+   }
+  ],
+  [
+   {
+    "hold": [
+     "ui_up"
+    ],
+    "frames": 10
+   }
+  ]
+ ],
+ "act_index": 5,
+ "frame": 79,
+ "reproduced": true,
+ "bug_frame": 79,
+ "gif": "runs/clean_gen0/evidence/infinite_jump_seed2.gif",
+ "png": "runs/clean_gen0/evidence/infinite_jump_seed2.png",
+ "strip": "runs/clean_gen0/evidence/infinite_jump_seed2_strip.png",
+ "strip_frames": 5
+}
