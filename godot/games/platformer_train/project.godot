@@ -26,6 +26,7 @@ config/icon="res://icon.webp"
 [autoload]
 
 Music="*res://music.tscn"
+QABridge="*res://addons/qa_crew/qa_bridge.gd"
 
 [display]
 

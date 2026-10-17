@@ -36,11 +36,13 @@ def main(argv=None):
     e.add_argument("--min-delta", type=float, default=1.0)
     e.add_argument("--min-p", type=float, default=0.8)
     e.add_argument("--start", help="genome dir to start from")
+    e.add_argument("--no-rerun", action="store_true", help="do not re-test the champion every night")
     v = sub.add_parser("eval")
     v.add_argument("--run", required=True)
     v.add_argument("--seeds", default="1000-1011")
     v.add_argument("--record", type=int, help="also record replays of first/last genome on this seed")
     v.add_argument("--all", action="store_true", help="evaluate every accepted generation, not just first and last")
+    v.add_argument("--env", help="evaluate on a different env (held-out game / bug set), e.g. godot_hunt_heldout")
     lg = sub.add_parser("lineage")
     lg.add_argument("--run", required=True)
     p = sub.add_parser("play")
@@ -55,12 +57,12 @@ def main(argv=None):
         from respawn.evolve import evolve
         from respawn.genome import Genome
         evolve(llm, a.env, a.run, a.gens, seeds(a.train), players, a.coach, a.parallel,
-               Genome.load(a.start) if a.start else None, a.min_delta, a.min_p, a.thinking)
+               Genome.load(a.start) if a.start else None, a.min_delta, a.min_p, a.thinking, not a.no_rerun)
     elif a.cmd == "eval":
         from respawn.evaluate import heldout, markdown
-        out = heldout(llm, a.run, seeds(a.seeds), players, a.parallel, a.record, a.all, a.thinking)
+        out = heldout(llm, a.run, seeds(a.seeds), players, a.parallel, a.record, a.all, a.thinking, env=a.env)
         md = markdown(out)
-        open(os.path.join(a.run, "heldout.md"), "w").write(md + "\n")
+        open(os.path.join(a.run, f"heldout_{out['env']}.md"), "w").write(md + "\n")
         print(md)
     elif a.cmd == "lineage":
         for line in open(os.path.join(a.run, "lineage.jsonl")):

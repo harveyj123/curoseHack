@@ -11,9 +11,9 @@ from respawn.harness import run_many
 
 
 def heldout(llm, run_dir: str, seeds: list, player_models: list, parallel: int = 4, record_seed: int | None = None,
-            include_all: bool = False, thinking: bool = False) -> dict:
+            include_all: bool = False, thinking: bool = False, env: str | None = None) -> dict:
     cfg = json.load(open(os.path.join(run_dir, "config.json")))
-    env_name = cfg["env"]
+    env_name = env or cfg["env"]
     gdir = os.path.join(run_dir, "genomes")
     names = sorted(os.listdir(gdir))
     picks = names if include_all else [names[0], names[-1]]
@@ -35,7 +35,7 @@ def heldout(llm, run_dir: str, seeds: list, player_models: list, parallel: int =
             g = Genome.load(os.path.join(gdir, n))
             ep = run_many(llm, env_name, [record_seed], g, player_models, 1, record=True, thinking=thinking)[0]
             json.dump(ep.to_json(with_replay=True), open(os.path.join(run_dir, "replays", f"{n}_seed{record_seed}.json"), "w"), default=str)
-    json.dump(out, open(os.path.join(run_dir, "heldout.json"), "w"), indent=2, default=str)
+    json.dump(out, open(os.path.join(run_dir, f"heldout_{env_name}.json"), "w"), indent=2, default=str)
     return out
 
 

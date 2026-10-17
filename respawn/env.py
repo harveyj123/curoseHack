@@ -46,7 +46,7 @@ def register(name: str):
 def get(name: str):
     if name not in REGISTRY:
         import importlib
-        importlib.import_module(f"respawn.envs.{name}")
+        importlib.import_module(f"respawn.envs.{'godot_hunt' if name.startswith('godot_hunt') else name}")
     return REGISTRY[name]
 
 

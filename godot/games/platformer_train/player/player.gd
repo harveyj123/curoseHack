@@ -22,10 +22,12 @@ var gravity: int = ProjectSettings.get("physics/2d/default_gravity")
 @onready var gun = sprite.get_node(^"Gun") as Gun
 @onready var camera := $Camera as Camera2D
 var _double_jump_charged := false
+var _burst_fx: GPUParticles2D  # sparkles shown when shooting out of a double jump
 
 
 func _physics_process(delta: float) -> void:
-	if is_on_floor():
+	# PLANTED BUG (infinite jump): touching a wall recharges the double jump, so you can climb any wall.
+	if is_on_floor() or is_on_wall():
 		_double_jump_charged = true
 	if Input.is_action_just_pressed("jump" + action_suffix):
 		try_jump()
@@ -50,6 +52,9 @@ func _physics_process(delta: float) -> void:
 	var is_shooting := false
 	if Input.is_action_just_pressed("shoot" + action_suffix):
 		is_shooting = gun.shoot(sprite.scale.x)
+		if is_shooting and not is_on_floor() and not _double_jump_charged:
+			# PLANTED BUG (crash): _burst_fx is never created, so shooting after a double jump hits a null instance.
+			_burst_fx.restart()
 
 	var animation := get_new_animation(is_shooting)
 	if animation != animation_player.current_animation and shoot_timer.is_stopped():
@@ -81,6 +86,8 @@ func try_jump() -> void:
 	elif _double_jump_charged:
 		_double_jump_charged = false
 		velocity.x *= 2.5
+		# PLANTED BUG (wall clip): the double-jump "burst" nudges position directly, skipping collision.
+		position.x += velocity.x * 0.12
 		jump_sound.pitch_scale = 1.5
 	else:
 		return

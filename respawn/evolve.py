@@ -34,7 +34,7 @@ def log(msg):
 
 def evolve(llm, env_name: str, run_dir: str, gens: int, train_seeds: list, player_models: list, coach_model: str,
            parallel: int = 4, start: Genome | None = None, min_delta: float = 1.0, min_p: float = 0.8,
-           thinking: bool = False):
+           thinking: bool = False, rerun_champion: bool = True):
     os.makedirs(os.path.join(run_dir, "episodes"), exist_ok=True)
     state_path = os.path.join(run_dir, "state.json")
     lineage_path = os.path.join(run_dir, "lineage.jsonl")
@@ -85,6 +85,11 @@ def evolve(llm, env_name: str, run_dir: str, gens: int, train_seeds: list, playe
             continue
         cand.meta = {"gen": g, "parent": champion.fingerprint(), "change": entry["change"]}
         log(f"night {g}: testing candidate {cand.fingerprint()}: {entry['change'][:120]}")
+        if rerun_champion:  # fresh, paired runs of the current best crew: no stale or lucky baselines
+            fresh = run_many(llm, env_name, train_seeds, champion, player_models, parallel, thinking=thinking)
+            _save_eps(os.path.join(run_dir, "episodes", f"gen_{g:03d}_champ.jsonl"), fresh)
+            champ_scores = {e.seed: (champ_scores.get(e.seed, e.score) + e.score) / 2 for e in fresh}
+            champ_eps = champ_eps + fresh
         eps = run_many(llm, env_name, train_seeds, cand, player_models, parallel, thinking=thinking)
         ep_path = os.path.join(run_dir, "episodes", f"gen_{g:03d}_cand.jsonl")
         _save_eps(ep_path, eps)
