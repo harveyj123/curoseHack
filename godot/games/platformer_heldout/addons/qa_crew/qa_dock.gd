@@ -127,6 +127,12 @@ func _ready() -> void:
 		for i in tabs.get_tab_count():
 			if tabs.get_tab_control(i).name == want:
 				tabs.current_tab = i
+		if want == "Gate" or want == "Tools":
+			await get_tree().create_timer(1.0).timeout
+			_on_step(3)
+			if want == "Tools":  # the bottom of the Crew tab: night 1's coach-written tool
+				await get_tree().create_timer(0.5).timeout
+				crew_scroll.scroll_vertical = 100000
 		if want == "Suggest":  # Rules tab scrolled to the suggestions
 			tabs.current_tab = _tab_index("Rules")
 			await get_tree().create_timer(1.0).timeout
@@ -238,6 +244,8 @@ func _on_step(i: int) -> void:
 
 func _scroll_crew_to(c: Control) -> void:
 	if crew_scroll and c:
+		await get_tree().process_frame  # the tab was just switched: let the scroll range update
+		await get_tree().process_frame
 		crew_scroll.scroll_vertical = int(c.position.y)
 		var tw := create_tween()
 		c.modulate = Color(1.6, 1.6, 1.0)
@@ -1300,6 +1308,11 @@ func _run_path() -> String:
 	return p
 
 func _load_crew() -> void:
+	# The demo ships its run as demo/ (lineage.jsonl + genomes/): use it when runs/hunt1 is not there.
+	var rt := run_edit.text.strip_edges()
+	if (rt == "" or rt == "runs/hunt1") and not FileAccess.file_exists(_run_path().path_join("lineage.jsonl")) \
+			and FileAccess.file_exists(repo_edit.text.path_join("demo/lineage.jsonl")):
+		run_edit.text = "demo"
 	EditorInterface.get_editor_settings().set_setting(RUNDIR_SETTING, run_edit.text)
 	_nights.clear()
 	var dir := _run_path()
@@ -1324,6 +1337,7 @@ func _load_crew() -> void:
 		_nights.size() - 1, kept.size() - 1, first, best]
 	_load_coach(dir)
 	var t := ""
+	var gdirs := _genome_dirs(dir)
 	for i in range(_nights.size() - 1, -1, -1):
 		var n: Dictionary = _nights[i]
 		var acc: bool = n.get("accepted", false)
@@ -1344,9 +1358,53 @@ func _load_crew() -> void:
 				why += "  tools: " + ", ".join(n["tools"])
 			if why != "":
 				t += "[color=#8a8f99]%s[/color]\n" % _esc(why)
+			t += _tool_code(dir, n, gdirs)
 		t += "\n"
 	nights_text.text = t
 	_fill_card(first, best, _load_heldout(dir))
+
+func _genome_dirs(dir: String) -> Dictionary:
+	# fingerprint -> genome folder, for kept genomes (genomes/) and rejected candidates (rejected/)
+	var out := {}
+	for sub in ["genomes", "rejected"]:
+		var base := dir.path_join(sub)
+		if not DirAccess.dir_exists_absolute(base):
+			continue
+		for g in DirAccess.get_directories_at(base):
+			var m = JSON.parse_string(FileAccess.get_file_as_string(base.path_join(g).path_join("meta.json")))
+			if typeof(m) == TYPE_DICTIONARY and m.has("fingerprint"):
+				out[str(m["fingerprint"])] = base.path_join(g)
+	return out
+
+func _tool_files(gdir: String) -> Dictionary:
+	var out := {}
+	var td := gdir.path_join("tools")
+	if gdir != "" and DirAccess.dir_exists_absolute(td):
+		for f in DirAccess.get_files_at(td):
+			if f.ends_with(".py"):
+				out[f] = FileAccess.get_file_as_string(td.path_join(f))
+	return out
+
+func _tool_code(dir: String, n: Dictionary, gdirs: Dictionary) -> String:
+	# The crew rewriting itself: the tool code the coach wrote (or changed) that night, vs the parent genome.
+	var gdir: String = gdirs.get(str(n.get("fingerprint", "")), "")
+	if gdir == "":
+		var cand := dir.path_join("rejected/gen_%03d" % int(n.get("gen", 0)))
+		gdir = cand if DirAccess.dir_exists_absolute(cand) else ""
+	var mine := _tool_files(gdir)
+	var parent := _tool_files(gdirs.get(str(n.get("parent", "")), ""))
+	var t := ""
+	for f in mine:
+		if parent.get(f, "") == mine[f]:
+			continue
+		var verb := "rewrote" if parent.has(f) else "wrote"
+		var lines: PackedStringArray = str(mine[f]).strip_edges().split("\n")
+		var shown := "\n".join(lines.slice(0, 60))
+		if lines.size() > 60:
+			shown += "\n# ... %d more lines" % (lines.size() - 60)
+		t += "[b]Night %d: the coach %s tools/%s[/b]%s\n" % [int(n.get("gen", 0)), verb, f, "" if n.get("accepted", false) else "  [color=#8a8f99](rejected candidate)[/color]"]
+		t += "[bgcolor=#00000055][code]%s[/code][/bgcolor]\n" % _esc(shown)
+	return t
 
 func _p_better(n: Dictionary) -> String:
 	var st = n.get("stats")

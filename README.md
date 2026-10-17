@@ -77,7 +77,8 @@ back into the next prompt, so each round proposes kinds of rules the developer h
     each rule's compiled check.
   - **Crew**: how the crew learned, from a run's files alone: a big version 0 vs latest card (unseen games
     when `heldout_*.json` exist), the coach's latest change with its playbook diff, and from `lineage.jsonl` score per night (filled dots = kept
-    changes on the champion line, hollow = rejected candidates), each night's change and kept/rejected verdict with P(better), and
+    changes on the champion line, hollow = rejected candidates), each night's change and kept/rejected verdict with P(better), the tool code the coach wrote that night
+    ("Night 1: the coach wrote tools/bug_hunter.py", diffed against the parent genome), and
     version 0 vs latest on unseen games when `heldout_*.json` files exist.
   - **Run**: Crusoe API key, crew folder, Python, genome and seeds, **Run QA crew**, a status line with a
     progress bar (sessions played, then findings verified) and a live log. When
