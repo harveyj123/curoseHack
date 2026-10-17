@@ -62,6 +62,20 @@ Bug classes the oracle confirms: `crash` (GDScript error), `clip` (through/insid
 - Optional `res://qa_crew.json` per game: player class, score location, collectibles, bounds, spawn
   points, key letters. Without it the crew guesses from the InputMap.
 
+## Why Nemotron
+
+One open model family covers every role, served from one Crusoe endpoint (prices in USD per 1M tokens: input / output / cached input):
+
+| Role | Model | Why this one |
+|---|---|---|
+| Hunters (high volume) | Nemotron 3 Nano 30B-A3B, Nemotron 3.5 Lightning 30B-A3B | Mixture-of-experts with about 3B active parameters, fast and cheap enough for a call every half second of play ($0.05 / $0.20 / $0.03). NVIDIA describes Lightning as a sub-agent workhorse for long-running agents |
+| Coach | Nemotron 3 Super 120B-A12B | 12B active; built for tool use and long-context reasoning, which is what reading a night of play logs needs ($0.30 / $2.40 / $0.15) |
+
+- **Long agent loops:** Nemotron 3 is a hybrid Mamba-Transformer mixture-of-experts built for long-context agent work, and a hunter's context is a long, growing log of states and actions (262k context on Crusoe).
+- **Cheap enough to evolve:** every candidate change is A/B tested over many sessions, and Crusoe's prefix caching bills the repeated system prompt, playbook and tool schemas at the cached rate.
+- **Open weights, data and recipes:** every verified session is a trajectory that could fine-tune a Nemotron into a dedicated game tester the developer runs themselves.
+- **Rate limits:** Crusoe limits requests per model, so giving each role its own Nemotron spreads the load.
+
 ## Layout
 
 ```
