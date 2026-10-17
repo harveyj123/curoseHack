@@ -373,14 +373,14 @@ func _build_crew() -> Control:
 	bar.add_child(load_button)
 	root.add_child(bar)
 	root.add_child(_rich(crew_summary))
-	root.add_child(_section("Score per night"))
+	root.add_child(_section("Verified bugs per session, per night (training)"))
 	chart.custom_minimum_size = Vector2(0, 180) * s
 	chart.draw.connect(_draw_chart)
 	chart.resized.connect(chart.queue_redraw)
 	root.add_child(chart)
 	root.add_child(_section("Unseen games: version 0 vs latest"))
 	root.add_child(_rich(heldout_text))
-	coach_title = _section("Coach: latest change to the playbook")
+	coach_title = _section("Coach: latest change the gate kept")
 	root.add_child(coach_title)
 	root.add_child(_rich(coach_text))
 	nights_title = _section("Gate: every night's verdict")
@@ -403,15 +403,25 @@ func _build_run() -> Control:
 	python_edit.placeholder_text = "python3 with Pillow (e.g. <crew folder>/.venv/bin/python3)"
 	python_edit.text = es.get_setting(PYTHON_SETTING) if es.has_setting(PYTHON_SETTING) else _guess_python()
 	_add_row(root, "Crew genome", genome_edit)
-	genome_edit.placeholder_text = "empty = newest trained crew in demo/genomes; \"none\" = untrained"
+	genome_edit.placeholder_text = "empty = newest trained crew; none = untrained"
 	genome_edit.text = es.get_setting(GENOME_SETTING) if es.has_setting(GENOME_SETTING) else ""
 	_add_row(root, "Sessions (seeds)", seeds_edit)
 	seeds_edit.text = "0-3"
 	watch_check.text = "Watch live (first session plays in a game window)"
-	watch_check.button_pressed = es.get_setting(WATCH_SETTING) if es.has_setting(WATCH_SETTING) else false
+	watch_check.button_pressed = es.get_setting(WATCH_SETTING) if es.has_setting(WATCH_SETTING) else true
 	root.add_child(watch_check)
 	run_button.text = "Run QA crew"
 	run_button.pressed.connect(_on_run)
+	var s := EditorInterface.get_editor_scale()
+	run_button.custom_minimum_size = Vector2(0, 34) * s
+	for st_name in ["normal", "hover", "pressed", "disabled"]:
+		var rsb := StyleBoxFlat.new()
+		rsb.bg_color = _col("accent_color").darkened(0.15 if st_name == "normal" else (0.0 if st_name == "hover" else 0.5))
+		rsb.set_corner_radius_all(int(5 * s))
+		rsb.set_content_margin_all(6 * s)
+		run_button.add_theme_stylebox_override(st_name, rsb)
+	run_button.add_theme_color_override("font_color", Color.WHITE)
+	run_button.add_theme_color_override("font_hover_color", Color.WHITE)
 	root.add_child(run_button)
 	run_status.text = "Idle. Press Run QA crew to start a hunt."
 	run_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -428,6 +438,7 @@ func _build_run() -> Control:
 	output.custom_minimum_size = Vector2(0, 320)
 	output.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	output.meta_clicked.connect(func(meta): OS.shell_open(str(meta)))
+	output.visible = false  # shown with the first line of output
 	root.add_child(output)
 	return root
 
@@ -528,7 +539,7 @@ func _on_run() -> void:
 	es.set_setting(PYTHON_SETTING, python_edit.text)
 	es.set_setting(WATCH_SETTING, watch_check.button_pressed)
 	if key_edit.text.strip_edges() == "" or repo_edit.text.strip_edges() == "":
-		output.append_text("[color=orange]Set the Crusoe API key and the crew folder first.[/color]\n")
+		_out("[color=orange]Set the Crusoe API key and the crew folder first.[/color]\n")
 		return
 	var project := ProjectSettings.globalize_path("res://")
 	var out_dir := ProjectSettings.globalize_path(REPORTS)
@@ -540,19 +551,19 @@ func _on_run() -> void:
 	if g != "" and g != "none":
 		if not g.is_absolute_path():
 			g = repo_edit.text.path_join(g)
-		output.append_text("Crew genome: %s\n" % _esc(g))
+		_out("Crew genome: %s\n" % _esc(g))
 		args.append_array(["--genome", g])
 	if watch_check.button_pressed:
 		args.append("--watch")
 	_run_job = _spawn(args, _show, _run_done)
 	if _run_job == null:
-		output.append_text("[color=red]Could not start %s.[/color]\n" % _esc(_python()))
+		_out("[color=red]Could not start %s.[/color]\n" % _esc(_python()))
 		return
 	run_button.disabled = true
 	_bugs_this_run = 0
 	_set_status("Starting the crew...", 0, 1)
 	_set_step(0)
-	output.append_text("[b]QA crew started[/b] on %s\n" % project)
+	_out("[b]QA crew started[/b] on %s\n" % project)
 
 var _bugs_this_run := 0
 
@@ -569,10 +580,15 @@ func _run_done(code: int, _out: String) -> void:
 		_set_status("Done: %d verified bug report(s). See the Bugs tab." % _bugs_this_run, 1, 1)
 	else:
 		_set_status("Stopped with exit code %d: see the log below." % code, 0, 1)
-	output.append_text("[b]Done[/b] (exit %d). Reports are in res://qa_reports/\n" % code)
+	_out("[b]Done[/b] (exit %d). Reports are in res://qa_reports/\n" % code)
 	EditorInterface.get_resource_filesystem().scan()
 	_refresh_bugs()
-	tabs.current_tab = 0
+	if code == 0:  # a failed run keeps its error in view
+		tabs.current_tab = _tab_index("Bugs")
+
+func _out(t: String) -> void:
+	output.visible = true
+	output.append_text(t)
 
 func _show(line: String) -> void:
 	if line.begins_with("PROGRESS "):  # PROGRESS hunt 2/4 bugs=... | PROGRESS verify 1/3 (respawn.qa hunt)
@@ -591,11 +607,11 @@ func _show(line: String) -> void:
 		_bugs_this_run += 1
 		var id := line.get_slice("-> ", 1).strip_edges()
 		var path := ProjectSettings.globalize_path("res://qa_reports/" + id)
-		output.append_text("[color=tomato]BUG[/color] %s  [url=%s]report[/url]\n" % [_esc(line.get_slice("  repro", 0)), path])
+		_out("[color=tomato]BUG[/color] %s  [url=%s]report[/url]\n" % [_esc(line.get_slice("  repro", 0)), path])
 	elif line.begins_with("LIVE "):  # a watched hunter's move (respawn.qa hunt --watch)
-		output.append_text("[color=#5ec8e5]%s[/color]\n" % _esc(line.substr(5)))
+		_out("[color=#5ec8e5]%s[/color]\n" % _esc(line.substr(5)))
 	else:
-		output.append_text(_esc(line) + "\n")
+		_out(_esc(line) + "\n")
 
 # ------------------------------------------------------------------ Bugs tab
 func _refresh_bugs() -> void:
@@ -712,7 +728,8 @@ func _bug_row(r: Dictionary, i: int) -> Button:
 	badge.tooltip_text = "Severity: crash = high; clip, out of bounds and house rules = medium; others = low"
 	head.add_child(badge)
 	var cls := Label.new()
-	cls.text = _class_label(String(r["bug_class"]))
+	var is_rule := String(r["bug_class"]).begins_with("rule:")
+	cls.text = "HOUSE RULE" if is_rule else _class_label(String(r["bug_class"]))
 	cls.clip_text = true
 	cls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cls.add_theme_font_override("font", EditorInterface.get_editor_theme().get_font("bold", "EditorFonts"))
@@ -726,6 +743,12 @@ func _bug_row(r: Dictionary, i: int) -> Button:
 	var title := Label.new()
 	var tt: String = r.get("title", "")
 	title.text = tt.substr(tt.find(": ") + 2) if tt.find(": ") != -1 else tt  # class is already in the head
+	if is_rule:  # the developer's own words, not the check's raw output
+		var rt := str((r.get("rule") if typeof(r.get("rule")) == TYPE_DICTIONARY else {}).get("text", ""))
+		if rt == "":
+			rt = str(r.get("expected", "")).trim_prefix("House rule: ")
+		if rt != "":
+			title.text = rt
 	title.clip_text = true
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1333,8 +1356,8 @@ func _load_crew() -> void:
 	var kept := _nights.filter(func(n): return n.get("accepted", false))
 	var first: float = float(_nights[0].get("mean", 0))
 	var best: float = float(kept[-1].get("mean", 0)) if kept.size() > 0 else first
-	crew_summary.text = "%d night(s), %d change(s) kept.  Score per session (10 per verified bug): [b]%.1f[/b] → [b]%.1f[/b] (champion)" % [
-		_nights.size() - 1, kept.size() - 1, first, best]
+	crew_summary.text = "%d night(s), %d change(s) kept.  Verified bugs per session (training): [b]%.2f[/b] → [b]%.2f[/b] (champion)" % [
+		_nights.size() - 1, kept.size() - 1, first / 10.0, best / 10.0]
 	_load_coach(dir)
 	var t := ""
 	var gdirs := _genome_dirs(dir)
@@ -1347,7 +1370,7 @@ func _load_crew() -> void:
 		elif acc:
 			head += "[bgcolor=#1f6f3a][color=white] ● kept [/color][/bgcolor]  mean %.2f vs champion %.2f%s" % [float(n.get("mean", 0)), float(n.get("champion_mean", 0)), _p_better(n)]
 		elif n.has("mean"):
-			head += "[bgcolor=#8a2a26][color=white] ○ rejected [/color][/bgcolor]  mean %.2f vs champion %.2f%s" % [float(n.get("mean", 0)), float(n.get("champion_mean", 0)), _p_better(n)]
+			head += "[bgcolor=#4a4f5a][color=white] ○ gate blocked: no gain [/color][/bgcolor]  mean %.2f vs champion %.2f%s" % [float(n.get("mean", 0)), float(n.get("champion_mean", 0)), _p_better(n)]
 		else:
 			head += "[color=#e8615a]× invalid[/color]"
 		t += head + "\n"
@@ -1427,17 +1450,22 @@ func _fill_card(first: float, best: float, rows: Array) -> void:
 	var dim := _col("font_disabled_color")
 	if first < 0:
 		card_box.add_child(_card_label("Version 0 vs latest", 15, _col("font_color")))
-		card_box.add_child(_card_label("No run loaded yet. Pick a run folder below (e.g. runs/hunt1) and press Load.", 12, dim))
+		card_box.add_child(_card_label("No run loaded yet. Pick a run folder below (demo, or an evolution run such as runs/hunt1) and press Load. This card then shows verified bugs per session for the starting crew (version 0) vs the latest kept crew, on games the crew never trained on.", 12, dim))
 		return
 	if rows.is_empty():
-		card_box.add_child(_card_label("Version 0 vs latest  (training sessions)", 13, dim))
+		card_box.add_child(_card_label("Version 0 vs latest  (training sessions only)", 13, dim))
 		card_box.add_child(_card_line("Training", first, best, null))
-		card_box.add_child(_card_label("No unseen-game eval in this run yet: python -m respawn eval --run <run> --env godot_hunt_heldout", 11, dim))
+		card_box.add_child(_card_label("Verified bugs per session. The real test is games the crew never trained on: once this run has heldout_*.json files (python -m respawn eval --run <run> --env godot_hunt_heldout), they appear here.", 11, dim))
 		return
 	card_box.add_child(_card_label("Version 0 vs latest on games it never trained on", 13, dim))
 	for row in rows:
 		card_box.add_child(_card_line(str(row[0]), float(row[1]), float(row[2]), row[3]))
-	card_box.add_child(_card_label("bugs found per session (verified by replay), %s unseen session(s) per game" % str(rows[0][3].get("n", "?")), 11, dim))
+	var better := 0
+	for row in rows:
+		better += 1 if float(row[2]) > float(row[1]) else 0
+	card_box.add_child(_card_label("Verified bugs per session, %s unseen session(s) per game." % str(rows[0][3].get("n", "?")), 11, dim))
+	if better == 0:
+		card_box.add_child(_card_label("The trained crew did not do better on unseen games: this run's gains did not transfer.", 12, Color("#e0a040")))
 
 func _card_line(name: String, a: float, b: float, c) -> Control:
 	var s := EditorInterface.get_editor_scale()
@@ -1447,7 +1475,7 @@ func _card_line(name: String, a: float, b: float, c) -> Control:
 	hb.add_child(n)
 	var gain := b - a
 	var col := Color("#5fc77a") if gain > 0 else (Color("#e8615a") if gain < 0 else _col("font_disabled_color"))
-	var nums := _card_label("%.2f → %.2f" % [a / 10.0, b / 10.0], 22, col)
+	var nums := _card_label("%.2f → %.2f" % [a / 10.0, b / 10.0], 20, col)
 	nums.autowrap_mode = TextServer.AUTOWRAP_OFF
 	hb.add_child(nums)
 	var extra := "%+.2f" % (gain / 10.0)
@@ -1467,19 +1495,27 @@ func _load_coach(dir: String) -> void:
 		champ = FileAccess.get_file_as_string(pb0)
 	var last = null
 	var before := champ
+	var last_kept = null
+	var before_kept := champ
 	for n in _nights:
 		var pr = n.get("proposal")
 		if typeof(pr) != TYPE_DICTIONARY:
 			continue
 		last = n
 		before = champ
-		if n.get("accepted", false) and str(pr.get("playbook", "")) != "":
-			champ = str(pr["playbook"])
+		if n.get("accepted", false):
+			last_kept = n
+			before_kept = champ
+			if str(pr.get("playbook", "")) != "":
+				champ = str(pr["playbook"])
+	if last_kept != null:  # prefer the change the gate kept; fall back to the latest proposal
+		last = last_kept
+		before = before_kept
 	if last == null:
 		coach_text.text = "[color=#8a8f99]No coach proposals in this run yet.[/color]"
 		return
 	var pr: Dictionary = last["proposal"]
-	var t := "[b]Night %s[/b]  %s\n" % [str(last.get("gen", "?")), "[color=#5fc77a]kept[/color]" if last.get("accepted", false) else "[color=#e8615a]rejected[/color]"]
+	var t := "[b]Night %s[/b]  %s\n" % [str(last.get("gen", "?")), "[color=#5fc77a]kept[/color]" if last.get("accepted", false) else "[color=#8a8f99]gate blocked: no gain (no change was kept yet)[/color]"]
 	if str(last.get("diagnosis", "")) != "":
 		t += "[color=#8a8f99]Diagnosis:[/color] %s\n" % _esc(str(last["diagnosis"]).left(220) + ("…" if str(last["diagnosis"]).length() > 220 else ""))
 	t += "[color=#8a8f99]Change:[/color] %s\n" % _esc(str(last.get("change", "")).left(400))
@@ -1522,8 +1558,8 @@ func _load_heldout(dir: String) -> Array:
 		var c: Dictionary = row[3]
 		var gain := float(c.get("mean_delta", 0))
 		t += "[cell]%s   [/cell][cell]%.2f   [/cell][cell]%.2f   [/cell][cell][color=%s]%+.2f[/color]   [/cell][cell]%s[/cell]" % [
-			_esc(row[0]), float(row[1]), float(row[2]), "#5fc77a" if gain > 0 else ("#e8615a" if gain < 0 else "#8a8f99"), gain, str(c.get("p_better", "?"))]
-	t += "[/table]\n[color=#8a8f99]%s vs %s, %s unseen session(s) per game[/color]" % [rows[0][3].get("to", ""), rows[0][3].get("from", ""), rows[0][3].get("n", "?")]
+			_esc(row[0]), float(row[1]) / 10.0, float(row[2]) / 10.0, "#5fc77a" if gain > 0 else ("#e8615a" if gain < 0 else "#8a8f99"), gain / 10.0, str(c.get("p_better", "?"))]
+	t += "[/table]\n[color=#8a8f99]Verified bugs per session, %s vs %s, %s unseen session(s) per game[/color]" % [rows[0][3].get("to", ""), rows[0][3].get("from", ""), rows[0][3].get("n", "?")]
 	heldout_text.text = t
 	return rows
 
@@ -1535,12 +1571,12 @@ func _draw_chart() -> void:
 	var fg := _col("font_color")
 	var dim := Color(fg, 0.45)
 	var acc := _col("accent_color")
-	var bad := Color("#e8615a")
+	var bad := Color("#8a8f99")  # gate-blocked candidates: grey, not an error
 	chart.draw_rect(Rect2(Vector2.ZERO, sz), Color(0, 0, 0, 0.18))
 	if _nights.is_empty():
 		chart.draw_string(font, Vector2(10, sz.y / 2), "no lineage yet", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, dim)
 		return
-	var l := 34.0 * s
+	var l := 42.0 * s
 	var r := 12.0 * s
 	var t := 26.0 * s
 	var b := 24.0 * s
@@ -1563,7 +1599,7 @@ func _draw_chart() -> void:
 	for v in [lo, (lo + hi) / 2.0, hi]:
 		var y: float = pt.call(g0, v).y
 		chart.draw_line(Vector2(l, y), Vector2(sz.x - r, y), Color(fg, 0.12), 1.0)
-		chart.draw_string(font, Vector2(4 * s, y + fs * 0.35), "%.0f" % v if hi - lo >= 6 else "%.1f" % v, HORIZONTAL_ALIGNMENT_LEFT, l - 6 * s, fs, dim)
+		chart.draw_string(font, Vector2(4 * s, y + fs * 0.35), "%.2f" % (v / 10.0), HORIZONTAL_ALIGNMENT_LEFT, l - 6 * s, fs, dim)  # bugs/session
 	var line := PackedVector2Array()
 	for i in _nights.size():
 		line.append(pt.call(_nights[i].get("gen", i), champ[i]))
@@ -1587,4 +1623,4 @@ func _draw_chart() -> void:
 	chart.draw_string(font, Vector2(lx + 8 * s, 14 * s), "kept (champion line)", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, dim)
 	var lx2 := lx + 8 * s + font.get_string_size("kept (champion line)", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 14 * s
 	chart.draw_arc(Vector2(lx2, 10 * s), 3.5 * s, 0, TAU, 16, bad, 1.4 * s, true)
-	chart.draw_string(font, Vector2(lx2 + 8 * s, 14 * s), "rejected", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, dim)
+	chart.draw_string(font, Vector2(lx2 + 8 * s, 14 * s), "gate blocked", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, dim)
