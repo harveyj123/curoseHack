@@ -175,7 +175,9 @@ It must define:
 obs keys: map {cell, left, top, rows: list of strings, '#' solid '.' empty, row 0 = top}, player {x,y,vx,vy,floor,wall},
 bounds {left,top,right,bottom}, enemies [[x,y]], score, collectibles_left, found (list of bug classes already found),
 history (list of {inputs, summary}). World y grows downward. Map cell (c, r) covers x = left + c*cell, y = top + r*cell.
-Helpers are free for the tester (they take no game time). No file, network or os access."""
+Helpers are free for the tester (they take no game time). No file, network or os access.
+run() always receives the CURRENT full observation as obs automatically; the tester's call args ({} is normal) only fill **kwargs.
+A tool that returns the same inputs every time makes the tester repeat itself: vary suggestions with obs['history'] and obs['found']."""
 
     def observation(self, agent="hunter"):
         return {"map": self.map, "player": self.state.get("player"), "bounds": self.state.get("bounds"),
