@@ -71,5 +71,11 @@
     "strip": "evidence/infinite_jump_seed0_strip.png",
     "strip_frames": 11
   },
-  "check": "python -m respawn.qa check godot/games/platformer_heldout/qa_reports/infinite_jump-88d5f90e.json"
+  "check": "python -m respawn.qa check godot/games/platformer_heldout/qa_reports/infinite_jump-88d5f90e.json",
+  "plain": {
+    "headline": "You can keep jumping in mid-air: 3 jumps before landing, but only 1 extra is allowed.",
+    "what_happened": "The player jumped 2 times in the air without touching the ground.",
+    "how_to_see_it": "Start the level from spawn point 1, then wait 0.3 s, then tap Jump 3 times. Or press Replay in game.",
+    "why_it_matters": "Players can fly over obstacles and skip parts of the level."
+  }
 }

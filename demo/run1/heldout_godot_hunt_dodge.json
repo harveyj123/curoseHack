@@ -1,0 +1,278 @@
+{
+  "env": "godot_hunt_dodge",
+  "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107
+  ],
+  "genomes": {
+    "gen_000": {
+      "fingerprint": "a6ebc8c0ee",
+      "change": "starting team",
+      "scores": {
+        "100": 0,
+        "101": 0,
+        "102": 0,
+        "103": 0,
+        "104": 10,
+        "105": 0,
+        "106": 0,
+        "107": 0
+      },
+      "mean": 1.25,
+      "outcomes": {
+        "100": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "101": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "102": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "103": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "104": {
+          "score": 10,
+          "bugs": [
+            "ghost_score"
+          ],
+          "details": {
+            "ghost_score": "score 7 -> 8 while the player was hidden/dead"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "ghost_score",
+              "detail": "score 7 -> 8 while the player was hidden/dead",
+              "seed": 104,
+              "frame": 595,
+              "act_index": 9,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_up"
+                    ],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_down"
+                    ],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_down"
+                    ],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_up"
+                    ],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_down"
+                    ],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "start_game"
+                    ],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_up"
+                    ],
+                    "frames": 60
+                  }
+                ]
+              ],
+              "project": "dodge_heldout"
+            }
+          ]
+        },
+        "105": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "106": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "107": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        }
+      }
+    },
+    "gen_001": {
+      "fingerprint": "a5974c4abd",
+      "change": "Add a tool that, given the current observation, suggests a focused input sequence to test for infinite_jump (double jump when only one is allowed) and clip (moving into solid geometry), thereby increasing the chance of discovering bugs.",
+      "scores": {
+        "100": 0,
+        "101": 0,
+        "102": 0,
+        "103": 0,
+        "104": 0,
+        "105": 0,
+        "106": 0,
+        "107": 0
+      },
+      "mean": 0.0,
+      "outcomes": {
+        "100": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "101": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "102": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "103": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "104": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "105": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "106": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "107": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        }
+      }
+    }
+  },
+  "comparison": {
+    "from": "gen_000",
+    "to": "gen_001",
+    "n": 8,
+    "mean_delta": -1.25,
+    "wins": 0,
+    "losses": 1,
+    "ties": 7,
+    "p_better": 0.0,
+    "ci90": [
+      -3.75,
+      0.0
+    ],
+    "deltas": [
+      0,
+      0,
+      0,
+      0,
+      -10,
+      0,
+      0,
+      0
+    ]
+  }
+}

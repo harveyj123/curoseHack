@@ -1,8 +1,18 @@
-# Crash: Invalid call. Nonexistent function 'show_air_hint (via call)' in base 'Control (PauseMenu)
-
-**Class:** `crash`  **Game:** `/home/user/curosehack/godot/games/platformer_heldout`  **Reproduces:** yes
+# The game hit a script error when you press Pause in mid-air.
 
 ![failure](evidence/crash_seed1.gif)
+
+**What happened:** Godot stopped running the script at game.gd line 22, so the rest of that code did not run. The error was: Invalid call. Nonexistent function 'show_air_hint (via call)' in base 'Control (PauseMenu)'.
+
+**How to see it:** Start the level from spawn point 2, then hold Right for 0.2 s, then tap Jump, then press Pause. Or press Replay in game.
+
+**Why it matters:** The game's code stops working mid-play, so players can lose their progress or get stuck.
+
+## Details for AI agents
+
+### Crash: Invalid call. Nonexistent function 'show_air_hint (via call)' in base 'Control (PauseMenu)
+
+**Class:** `crash`  **Game:** `/home/user/curosehack/godot/games/platformer_heldout`  **Reproduces:** yes
 
 **Expected:** No script errors during play.
 

@@ -1,0 +1,26 @@
+[
+  {
+    "text": "The robot should never pass through walls or end up inside the ground.",
+    "enabled": true,
+    "id": "robot_pass_through_walls",
+    "code": "def check(prev, cur, ctx):\n    if cur.get(\"tunnel\") or cur.get(\"inside\"):\n        return \"player tunnel=%s inside=%s\" % (cur.get(\"tunnel\", False), cur.get(\"inside\", False))\n    return None\n",
+    "compiled_by": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "error": null
+  },
+  {
+    "text": "The robot can jump at most twice before it lands again.",
+    "enabled": true,
+    "id": "robot_jump_at_most",
+    "code": "def check(prev, cur, ctx):\n    if not cur.get(\"visible\", True):\n        return None\n    vy = cur.get(\"vy\", 0)\n    pvy = prev.get(\"vy\", 0)\n    is_jump = vy < -600 and (vy - pvy) < -300\n    if is_jump:\n        mem = ctx[\"mem\"]\n        air_jumps = mem.get(\"air_jumps\", 0)\n        if prev.get(\"floor\", False):\n            mem[\"air_jumps\"] = 0\n        else:\n            if air_jumps >= ctx.get(\"max_air_jumps\", 1):\n                return \"air jumps %d > allowed %d\" % (air_jumps + 1, ctx.get(\"max_air_jumps\", 1))\n            mem[\"air_jumps\"] = air_jumps + 1\n    if cur.get(\"floor\", False):\n        ctx[\"mem\"][\"air_jumps\"] = 0\n    return None\n",
+    "compiled_by": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "error": null
+  },
+  {
+    "text": "Coins can't be collected twice.",
+    "enabled": true,
+    "id": "coins_collected_twice",
+    "code": "def check(prev, cur, ctx):\n    for ev in ctx.get(\"events\", []):\n        if ev.get(\"type\") == \"score\" and ev.get(\"from\") is not None and ev[\"to\"] - ev[\"from\"] > 1:\n            return \"score jumped %s -> %s from one pickup\" % (ev[\"from\"], ev[\"to\"])\n    if ctx.get(\"score\") is not None and ctx.get(\"start_collectibles\", -1) >= 0:\n        mem = ctx[\"mem\"]\n        if ctx[\"score\"] - ctx[\"start_score\"] > ctx[\"taken\"] + 1:\n            mem[\"over\"] = mem.get(\"over\", 0) + 1\n            if mem[\"over\"] > 120:\n                return \"score %s but only %s coins taken\" % (ctx[\"score\"], ctx[\"taken\"])\n        else:\n            mem[\"over\"] = 0\n    return None\n",
+    "compiled_by": "NVIDIA-Nemotron-3-Super-120B-A12B",
+    "error": null
+  }
+]

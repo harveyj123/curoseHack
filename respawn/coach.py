@@ -5,6 +5,10 @@ pass its own test before the gatekeeper ever sees it), or reassign agent roles.
 """
 from __future__ import annotations
 
+import difflib
+import io
+import re
+import tokenize
 import json
 
 from respawn import env as envmod
@@ -74,6 +78,20 @@ Current roles: {json.dumps(champion.roles) if champion.roles else '(none)'}
             {"role": "user", "content": user}]
 
 
+def _pythonize_json_literals(src: str) -> str:
+    """Models often write JSON true/false/null inside the TOOL spec; turn them into Python literals."""
+    try:
+        toks = list(tokenize.generate_tokens(io.StringIO(src).readline))
+    except (tokenize.TokenError, SyntaxError):
+        return src
+    names = {t.string for t in toks if t.type == tokenize.NAME}
+    if not names & {"true", "false", "null"} or re.search(r"\b(true|false|null)\s*=", src):
+        return src
+    fix = {"true": "True", "false": "False", "null": "None"}
+    return tokenize.untokenize((t.type, fix.get(t.string, t.string) if t.type == tokenize.NAME else t.string, t.start, t.end, t.line)
+                               for t in toks)
+
+
 def apply_proposal(champion: Genome, prop: dict, env_cls) -> Genome:
     cand = champion.copy()
     for k in ("playbook", "playbook_append"):  # Nemotron often double-escapes the markdown into one line
@@ -90,6 +108,7 @@ def apply_proposal(champion: Genome, prop: dict, env_cls) -> Genome:
         src = tool["source"]
         if "\n" not in src and "\\n" in src:  # model double-escaped the code into one line
             tool["source"] = src.replace("\\n", "\n").replace("\\t", "\t").replace('\\"', '"')
+        tool["source"] = _pythonize_json_literals(tool["source"])
         spec = env_cls.validate_tool(tool["source"])  # raises ValueError
         ext = {"python": ".py", "js": ".js"}.get(env_cls.tool_lang, ".txt")
         fname = tool.get("filename") or spec["name"] + ext
@@ -122,6 +141,11 @@ def propose(llm: LLM, env_name: str, champion: Genome, episodes: list, history: 
             cand = apply_proposal(champion, prop, env_cls)
             if cand.fingerprint() == champion.fingerprint():
                 raise ValueError("proposal does not change anything")
+            for h in history:  # the coach tends to re-propose the same rejected idea night after night
+                if not h.get("accepted") and difflib.SequenceMatcher(None, str(prop.get("change", "")).lower(),
+                                                                     str(h.get("change", "")).lower()).ratio() > 0.6:
+                    raise ValueError(f"this repeats the idea rejected at gen {h['gen']}; propose a different kind of change "
+                                     "(e.g. rewrite or remove a tool that makes the players repeat the same inputs)")
             return cand, prop, ""
         except ValueError as e:
             err = str(e)

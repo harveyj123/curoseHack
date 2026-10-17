@@ -29,13 +29,14 @@ def strip(ims: list, path: str, width: int = 320, max_frames: int = 40) -> int:
 
 def capture(project_dir: str, finding: dict, out_dir: str, every: int = 2, window: int = 60) -> dict:
     """Replays finding['inputs'] act by act; captures frames of the act that triggered the bug."""
+    from respawn import rules as house_rules
     from respawn.envs.godot_hunt import Oracle
     os.makedirs(out_dir, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="qa_shots_")
     g = GodotGame(project_dir, headless=False)
     try:
         st = g.call("reset", seed=finding["seed"])
-        o = Oracle(g.info.get("config") or {}, st)
+        o = Oracle(g.info.get("config") or {}, st, finding.get("rules") or house_rules.load_enabled(g.project))
         acts = finding["inputs"]
         hit_act = finding.get("act_index", len(acts) - 1)
         for i, segs in enumerate(acts):
@@ -62,7 +63,7 @@ def capture(project_dir: str, finding: dict, out_dir: str, every: int = 2, windo
         d.rectangle([0, 0, im.width, 18], fill=(0, 0, 0))
         d.text((6, 3), tag, fill=(255, 80, 80) if abs(f - bug_frame) <= every else (255, 255, 255))
         frames.append((f, im))
-    base = os.path.join(out_dir, f"{finding['class']}_seed{finding['seed']}")
+    base = os.path.join(out_dir, f"{finding['class'].replace(':', '-')}_seed{finding['seed']}")
     out = {"reproduced": reproduced, "bug_frame": bug_frame, "gif": None, "png": None, "strip": None, "strip_frames": 0}
     if frames:
         ims = [im for _, im in frames]
@@ -71,6 +72,6 @@ def capture(project_dir: str, finding: dict, out_dir: str, every: int = 2, windo
         key.save(base + ".png")
         n = strip(ims, base + "_strip.png")
         out.update({"gif": base + ".gif", "png": base + ".png", "strip": base + "_strip.png", "strip_frames": n})
-    json.dump({**finding, **out}, open(base + ".json", "w"), indent=1)
+    json.dump({**{k: v for k, v in finding.items() if k != "rules"}, **out}, open(base + ".json", "w"), indent=1)
     shutil.rmtree(tmp, ignore_errors=True)
     return out

@@ -1,0 +1,2095 @@
+{
+  "env": "godot_hunt_heldout",
+  "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107
+  ],
+  "genomes": {
+    "gen_000": {
+      "fingerprint": "a6ebc8c0ee",
+      "change": "starting team",
+      "scores": {
+        "100": 0,
+        "101": 10,
+        "102": 0,
+        "103": 0,
+        "104": 0,
+        "105": 0,
+        "106": 10,
+        "107": 0
+      },
+      "mean": 2.5,
+      "outcomes": {
+        "100": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "101": {
+          "score": 10,
+          "bugs": [
+            "clip"
+          ],
+          "details": {
+            "clip": "through geometry at (792,657)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "clip",
+              "detail": "through geometry at (792,657)",
+              "seed": 101,
+              "frame": 39,
+              "act_index": 0,
+              "inputs": [
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "102": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "103": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "104": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "105": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "106": {
+          "score": 10,
+          "bugs": [
+            "infinite_jump"
+          ],
+          "details": {
+            "infinite_jump": "air jump #2 at (111,111)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "infinite_jump",
+              "detail": "air jump #2 at (111,111)",
+              "seed": 106,
+              "frame": 89,
+              "act_index": 13,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 20
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 20
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 20
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "107": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        }
+      }
+    },
+    "gen_001": {
+      "fingerprint": "f7187d43a1",
+      "change": "Add a tool called bug_explorer that suggests varied input sequences targeting unfound bug classes based on observation and history.",
+      "scores": {
+        "100": 10,
+        "101": 20,
+        "102": 20,
+        "103": 10,
+        "104": 10,
+        "105": 20,
+        "106": 20,
+        "107": 10
+      },
+      "mean": 15.0,
+      "outcomes": {
+        "100": {
+          "score": 10,
+          "bugs": [
+            "infinite_jump"
+          ],
+          "details": {
+            "infinite_jump": "air jump #2 at (879,478)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "infinite_jump",
+              "detail": "air jump #2 at (879,478)",
+              "seed": 100,
+              "frame": 241,
+              "act_index": 7,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "101": {
+          "score": 20,
+          "bugs": [
+            "clip",
+            "infinite_jump"
+          ],
+          "details": {
+            "clip": "through geometry at (734,657)",
+            "infinite_jump": "air jump #2 at (879,503)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "clip",
+              "detail": "through geometry at (734,657)",
+              "seed": 101,
+              "frame": 35,
+              "act_index": 2,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            },
+            {
+              "class": "infinite_jump",
+              "detail": "air jump #2 at (879,503)",
+              "seed": 101,
+              "frame": 135,
+              "act_index": 2,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "102": {
+          "score": 20,
+          "bugs": [
+            "clip",
+            "infinite_jump"
+          ],
+          "details": {
+            "clip": "through geometry at (171,657)",
+            "infinite_jump": "air jump #2 at (879,438)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "clip",
+              "detail": "through geometry at (171,657)",
+              "seed": 102,
+              "frame": 159,
+              "act_index": 4,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 40
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            },
+            {
+              "class": "infinite_jump",
+              "detail": "air jump #2 at (879,438)",
+              "seed": 102,
+              "frame": 527,
+              "act_index": 6,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 40
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "103": {
+          "score": 10,
+          "bugs": [
+            "infinite_jump"
+          ],
+          "details": {
+            "infinite_jump": "air jump #2 at (879,497)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "infinite_jump",
+              "detail": "air jump #2 at (879,497)",
+              "seed": 103,
+              "frame": 542,
+              "act_index": 10,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 30
+                  }
+                ],
+                [
+                  {
+                    "hold": [],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [],
+                    "frames": 60
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 100
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "104": {
+          "score": 10,
+          "bugs": [
+            "infinite_jump"
+          ],
+          "details": {
+            "infinite_jump": "air jump #2 at (708,247)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "infinite_jump",
+              "detail": "air jump #2 at (708,247)",
+              "seed": 104,
+              "frame": 126,
+              "act_index": 2,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "105": {
+          "score": 20,
+          "bugs": [
+            "infinite_jump",
+            "out_of_bounds"
+          ],
+          "details": {
+            "infinite_jump": "air jump #2 at (879,127)",
+            "out_of_bounds": "at (879,-251), bounds {'bottom': 690, 'left': -715, 'right': 1425, 'top': -250}"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "infinite_jump",
+              "detail": "air jump #2 at (879,127)",
+              "seed": 105,
+              "frame": 153,
+              "act_index": 3,
+              "inputs": [
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            },
+            {
+              "class": "out_of_bounds",
+              "detail": "at (879,-251), bounds {'bottom': 690, 'left': -715, 'right': 1425, 'top': -250}",
+              "seed": 105,
+              "frame": 150,
+              "act_index": 0,
+              "inputs": [
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "106": {
+          "score": 20,
+          "bugs": [
+            "clip",
+            "infinite_jump"
+          ],
+          "details": {
+            "clip": "through geometry at (153,337)",
+            "infinite_jump": "air jump #2 at (444,183)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "clip",
+              "detail": "through geometry at (153,337)",
+              "seed": 106,
+              "frame": 82,
+              "act_index": 6,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            },
+            {
+              "class": "infinite_jump",
+              "detail": "air jump #2 at (444,183)",
+              "seed": 106,
+              "frame": 189,
+              "act_index": 6,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "107": {
+          "score": 10,
+          "bugs": [
+            "infinite_jump"
+          ],
+          "details": {
+            "infinite_jump": "air jump #2 at (879,272)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "infinite_jump",
+              "detail": "air jump #2 at (879,272)",
+              "seed": 107,
+              "frame": 150,
+              "act_index": 2,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 5
+                  }
+                ],
+                [
+                  {
+                    "hold": [],
+                    "frames": 30
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  },
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "comparison": {
+    "from": "gen_000",
+    "to": "gen_001",
+    "n": 8,
+    "mean_delta": 12.5,
+    "wins": 8,
+    "losses": 0,
+    "ties": 0,
+    "p_better": 1.0,
+    "ci90": [
+      10.0,
+      15.0
+    ],
+    "deltas": [
+      10,
+      10,
+      20,
+      10,
+      10,
+      20,
+      10,
+      10
+    ]
+  }
+}

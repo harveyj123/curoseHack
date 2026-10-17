@@ -162,6 +162,8 @@ def agent_loop(llm: LLM, env, genome: Genome, agent: str, model: str, steps: lis
         if name is None:
             name, args = getattr(env, "default_action", ("wait", {}))
             note = (note + " | no valid action; default used").strip(" |")
+        if hasattr(env, "note") and not mock:  # envs that show the agent's reasoning (e.g. a watched Godot hunt)
+            env.note = note
         result = env.act(agent, name, args)
         recent.append(f"{i}: {name}({json.dumps(args)}) -> {result[:240]}")
         with lock:

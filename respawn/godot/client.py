@@ -33,11 +33,31 @@ def free_port() -> int:
                     continue
 
 
+_import_lock = threading.Lock()
+
+
+def ensure_imported(project: str, timeout: float = 120.0) -> None:
+    """A fresh clone has no <project>/.godot/ (import cache, class_name registry): without it the game fails to
+    resolve its own classes ("Could not find type ...") and a hunt files a false crash. Import it once
+    (`--import` waits for every resource to be imported, then quits; Godot 4.3+)."""
+    with _import_lock:  # parallel sessions of one hunt share the project
+        if os.path.isdir(os.path.join(project, ".godot")):
+            return
+        print(f"[qa] first run of {os.path.basename(project)}: importing the project (once)...", file=sys.stderr, flush=True)
+        try:
+            subprocess.run([GODOT, "--headless", "--import", "--path", project], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=timeout)
+        except (subprocess.TimeoutExpired, OSError) as e:
+            print(f"[qa] import did not finish: {e}", file=sys.stderr, flush=True)
+
+
 class GodotGame:
     """One running game process. Script errors printed by Godot are collected as crash evidence."""
 
-    def __init__(self, project: str, headless: bool = True, timeout: float = 60.0):
+    def __init__(self, project: str, headless: bool = True, timeout: float = 60.0, watch: bool = False):
+        """watch=True: a visible window that plays at real time and shows `say` captions (judges watching)."""
         self.project = os.path.abspath(project)
+        ensure_imported(self.project)
         self.port = free_port()
         self.slot = None
         if VISIBLE:
@@ -46,6 +66,7 @@ class GodotGame:
                 self.slot = next(i for i in range(64) if i not in _slots)
                 _slots.add(self.slot)
         args = [GODOT, "--path", self.project, "--fixed-fps", "60", "--audio-driver", "Dummy"]
+        headless = headless and not watch
         if headless:
             args.insert(1, "--headless")
         else:  # rendered (for screenshots / GIF evidence) on a virtual display
@@ -56,7 +77,7 @@ class GodotGame:
                 args += ["--resolution", f"{tw}x{th}", "--position", f"{self.slot % cols * tw},{self.slot // cols * th}"]
             if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
                 args = ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"] + args
-        args += ["--", f"--qa-port={self.port}"]
+        args += ["--", f"--qa-port={self.port}"] + (["--qa-watch"] if watch else [])
         env = dict(os.environ)
         self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, bufsize=1)
         self.errors: list[dict] = []

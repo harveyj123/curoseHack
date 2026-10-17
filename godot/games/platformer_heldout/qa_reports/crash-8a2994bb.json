@@ -57,5 +57,11 @@
     "strip": "evidence/crash_seed1_strip.png",
     "strip_frames": 12
   },
-  "check": "python -m respawn.qa check godot/games/platformer_heldout/qa_reports/crash-8a2994bb.json"
+  "check": "python -m respawn.qa check godot/games/platformer_heldout/qa_reports/crash-8a2994bb.json",
+  "plain": {
+    "headline": "The game hit a script error when you press Pause in mid-air.",
+    "what_happened": "Godot stopped running the script at game.gd line 22, so the rest of that code did not run. The error was: Invalid call. Nonexistent function 'show_air_hint (via call)' in base 'Control (PauseMenu)'.",
+    "how_to_see_it": "Start the level from spawn point 2, then hold Right for 0.2 s, then tap Jump, then press Pause. Or press Replay in game.",
+    "why_it_matters": "The game's code stops working mid-play, so players can lose their progress or get stuck."
+  }
 }
