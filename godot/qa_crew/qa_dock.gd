@@ -14,7 +14,9 @@ var seeds_edit := LineEdit.new()
 var run_button := Button.new()
 var output := RichTextLabel.new()
 var _pipe: FileAccess
+var _err_pipe: FileAccess
 var _pid := -1
+var _reader: Thread
 
 func _ready() -> void:
 	var es := EditorInterface.get_editor_settings()
@@ -58,7 +60,7 @@ func _on_run() -> void:
 	var project := ProjectSettings.globalize_path("res://")
 	var out_dir := ProjectSettings.globalize_path("res://qa_reports")
 	var args := PackedStringArray(["PYTHONPATH=" + repo_edit.text, "CRUSOE_API_KEY=" + key_edit.text,
-		"python3", "-m", "respawn.qa", "hunt", "--project", project, "--seeds", seeds_edit.text, "--out", out_dir])
+		"python3", "-u", "-m", "respawn.qa", "hunt", "--project", project, "--seeds", seeds_edit.text, "--out", out_dir])
 	if genome_edit.text.strip_edges() != "":
 		var g := genome_edit.text
 		if not g.is_absolute_path():
@@ -69,24 +71,39 @@ func _on_run() -> void:
 		output.append_text("[color=red]Could not start python3.[/color]\n")
 		return
 	_pipe = res["stdio"]
+	_err_pipe = res["stderr"]
 	_pid = res["pid"]
+	# Pipe reads block in Godot 4.3, so read on a thread; reading in _process froze the editor for the whole hunt.
+	_reader = Thread.new()
+	_reader.start(_read_output)
 	run_button.disabled = true
 	output.append_text("[b]QA crew started[/b] on %s\n" % project)
 
-func _process(_delta: float) -> void:
-	if _pipe == null:
-		return
-	while _pipe.get_position() < _pipe.get_length() or not _pipe.eof_reached():
-		var line := _pipe.get_line()
-		if line == "":
-			break
-		_show(line)
-	if _pid != -1 and not OS.is_process_running(_pid):
-		_pipe = null
-		_pid = -1
-		run_button.disabled = false
-		output.append_text("[b]Done.[/b] Reports are in res://qa_reports/\n")
-		EditorInterface.get_resource_filesystem().scan()
+func _read_output() -> void:
+	for pipe in [_pipe, _err_pipe]:
+		while true:
+			var line: String = pipe.get_line()
+			if line == "" and (pipe.eof_reached() or pipe.get_error() != OK):  # 4.3 pipes report ERR_FILE_CANT_READ, not EOF
+				break
+			if line != "":
+				_show.call_deferred(line)
+	_finished.call_deferred()
+
+func _finished() -> void:
+	_reader.wait_to_finish()
+	_reader = null
+	_pipe = null
+	_err_pipe = null
+	_pid = -1
+	run_button.disabled = false
+	output.append_text("[b]Done.[/b] Reports are in res://qa_reports/\n")
+	EditorInterface.get_resource_filesystem().scan()
+
+func _exit_tree() -> void:
+	if _pid != -1:
+		OS.kill(_pid)
+	if _reader:
+		_reader.wait_to_finish()
 
 func _show(line: String) -> void:
 	if line.begins_with("["):  # a bug report line from respawn.qa

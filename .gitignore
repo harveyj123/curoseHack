@@ -11,3 +11,4 @@ build/
 runs/
 mc/node_modules/
 runs_*.log
+qa_reports/

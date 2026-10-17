@@ -50,7 +50,7 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--genome")
     a = ap.parse_args(argv)
-    llm = LLM(mock=a.mock or None)
+    llm = None if a.cmd == "lineage" else LLM(mock=a.mock or None)  # lineage only reads files: no key needed
     players = a.players.split(",")
 
     if a.cmd == "evolve":
