@@ -1,7 +1,0 @@
-18:34:59 gen 0: evaluating starting team on 4 train seeds
-18:38:01 gen 0 mean -51.2 scores [-12, -23, -164, -6]
-18:38:01 night 1: coach dreaming over 4 episodes
-18:38:13 night 1: testing candidate 47fd90c535: Add a pathfinding tool that computes safe routes avoiding monsters and locked doors (unless the player has a key) and re
-18:46:26 night 1: rejected (mean gain -142.2 below the +1.0 bar)
-18:46:26 night 2: coach dreaming over 4 episodes
-18:46:45 night 2: testing candidate 5c7a3cc94b: Add a pathfinding tool that computes safe routes avoiding awake monsters and treating locked doors as walkable only when

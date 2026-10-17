@@ -10,3 +10,4 @@ dist/
 build/
 runs/
 mc/node_modules/
+runs_*.log
