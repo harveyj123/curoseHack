@@ -45,6 +45,9 @@ class Oracle:
 
     def __init__(self, cfg: dict, start_state: dict):
         self.max_air_jumps = int(cfg.get("max_air_jumps", 1))
+        self.jump_vy = float(cfg.get("jump_vy", 400))       # a jump sets vy below -jump_vy in one frame
+        self.max_jump_vy = cfg.get("max_jump_vy")           # faster launches (trampolines) are not jumps
+        self.wall_jumps = bool(cfg.get("wall_jumps", False))  # jumping off a wall is not an air jump
         self.start_collectibles = start_state.get("collectibles_left", -1)
         self.start_score = start_state.get("score") or 0  # e.g. a spawn point that lands on a coin
         self.found: dict = {}            # class -> {"frame", "detail"}
@@ -67,9 +70,11 @@ class Oracle:
         for f in res["frames"]:
             if f.get("tunnel") or f.get("inside"):
                 new += self._hit("clip", f["f"], f"{'through' if f.get('tunnel') else 'inside'} geometry at ({f['x']:.0f},{f['y']:.0f})")
-            if f.get("floor"):
+            if f.get("floor") or (self.wall_jumps and f.get("wall")):
                 self.air_jumps = 0
-            elif "vy" in f and "vy" in self.prev and f["vy"] < -400 and f["vy"] - self.prev["vy"] < -400 and not self.prev.get("floor"):
+            elif ("vy" in f and "vy" in self.prev and f["vy"] < -self.jump_vy and f["vy"] - self.prev["vy"] < -self.jump_vy
+                  and not self.prev.get("floor") and not (self.wall_jumps and self.prev.get("wall"))
+                  and (self.max_jump_vy is None or f["vy"] > -float(self.max_jump_vy))):
                 self.air_jumps += 1
                 if self.air_jumps > self.max_air_jumps:
                     new += self._hit("infinite_jump", f["f"], f"air jump #{self.air_jumps} at ({f['x']:.0f},{f['y']:.0f})")
@@ -323,3 +328,5 @@ def _make(project_name: str, env_name: str):
 HuntTrain = _make("platformer_train", "godot_hunt")
 HuntHeldout = _make("platformer_heldout", "godot_hunt_heldout")
 HuntDodge = _make("dodge_heldout", "godot_hunt_dodge")
+HuntPixel = _make("pixel_adventure", "godot_hunt_pixel")  # third-party game (SlayHorizon, MIT) with the pixel bug set
+HuntPixelClean = _make("pixel_clean", "godot_hunt_pixel_clean")  # same game, nothing planted: real bugs only

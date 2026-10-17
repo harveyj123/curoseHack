@@ -292,7 +292,7 @@ func _map(cell: int) -> Dictionary:
 			q.collision_mask = (p as CollisionObject2D).collision_mask if p is CollisionObject2D else 1
 			var solid := false
 			for h in space.intersect_point(q, 4):
-				if h.collider is StaticBody2D or h.collider is TileMap or h.collider is AnimatableBody2D:
+				if h.collider is StaticBody2D or h.collider is TileMap or h.collider is TileMapLayer or h.collider is AnimatableBody2D:
 					solid = true
 			row += "#" if solid else "."
 			x += cell
@@ -304,11 +304,19 @@ func _is_solid(h: Dictionary) -> bool:
 	# Solid level geometry only. One-way platforms are excluded: the player legally jumps up through them
 	# and can overlap them, so counting them as walls reports clips in an unmodified game.
 	var c = h.get("collider")
-	if not (c is StaticBody2D or c is TileMap or c is AnimatableBody2D):
+	if not (c is StaticBody2D or c is TileMap or c is TileMapLayer or c is AnimatableBody2D):
 		return false
 	if c is CollisionObject2D:
 		var owner_id: int = c.shape_find_owner(int(h.get("shape", 0)))
 		return not c.is_shape_owner_one_way_collision_enabled(owner_id)
+	if c is TileMapLayer:  # Godot 4.3+ tile layers (one node per layer)
+		var td: TileData = c.get_cell_tile_data(c.get_coords_for_body_rid(h["rid"]))
+		if td:
+			for pl in c.tile_set.get_physics_layers_count():
+				for i in td.get_collision_polygons_count(pl):
+					if td.is_collision_polygon_one_way(pl, i):
+						return false
+		return true
 	if c.has_method("get_coords_for_body_rid"):
 		var coords: Vector2i = c.get_coords_for_body_rid(h["rid"])
 		for layer in c.get_layers_count():

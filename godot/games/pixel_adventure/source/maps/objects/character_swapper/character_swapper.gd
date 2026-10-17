@@ -18,6 +18,9 @@ func _on_body_entered(body: Node2D) -> void:
 		return
 	if body.character_resource != character_resource:
 		body.character_resource = character_resource
+		# PLANTED BUG (pixel set): skins without a hat sprite crash the swap effect
+		if character_resource.resource_path.ends_with("virtual_guy.tres"):
+			body.get_node_or_null("Hat").show()
 
 
 func _set_character_resource(new_resource: CharacterResource) -> void:

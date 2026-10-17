@@ -14,6 +14,10 @@ GODOT = os.environ.get("GODOT_BIN", "/opt/godot/Godot_v4.3-stable_linux.x86_64")
 ERR_RE = re.compile(r"(SCRIPT ERROR|ERROR): (.*)")
 _port_lock = threading.Lock()
 _next_port = [27000 + os.getpid() % 1000 * 3]
+# QA_VISIBLE=1 runs every game in a real window on $DISPLAY (e.g. an Xvfb screen being recorded), tiled in a
+# grid of QA_TILE (default 640x360) cells so several parallel hunters can be watched at once.
+VISIBLE = os.environ.get("QA_VISIBLE") == "1"
+_slots: set = set()
 
 
 def free_port() -> int:
@@ -35,11 +39,21 @@ class GodotGame:
     def __init__(self, project: str, headless: bool = True, timeout: float = 60.0):
         self.project = os.path.abspath(project)
         self.port = free_port()
+        self.slot = None
+        if VISIBLE:
+            headless = False
+            with _port_lock:
+                self.slot = next(i for i in range(64) if i not in _slots)
+                _slots.add(self.slot)
         args = [GODOT, "--path", self.project, "--fixed-fps", "60", "--audio-driver", "Dummy"]
         if headless:
             args.insert(1, "--headless")
         else:  # rendered (for screenshots / GIF evidence) on a virtual display
             args += ["--rendering-driver", "opengl3"]
+            if self.slot is not None:
+                tw, th = (int(v) for v in os.environ.get("QA_TILE", "640x360").split("x"))
+                cols = int(os.environ.get("QA_COLS", "3"))
+                args += ["--resolution", f"{tw}x{th}", "--position", f"{self.slot % cols * tw},{self.slot // cols * th}"]
             if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
                 args = ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"] + args
         args += ["--", f"--qa-port={self.port}"]
@@ -95,6 +109,10 @@ class GodotGame:
         return errs
 
     def close(self):
+        if self.slot is not None:
+            with _port_lock:
+                _slots.discard(self.slot)
+            self.slot = None
         try:
             if getattr(self, "sock", None):
                 self.sock.sendall(b'{"cmd":"quit"}\n')

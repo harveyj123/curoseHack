@@ -18,6 +18,7 @@ config/icon="res://assets/pixel-adventure/Main Characters/Ninja Frog/Fall (32x32
 [autoload]
 
 Events="*res://source/autoload/events.gd"
+QABridge="*res://addons/qa_crew/qa_bridge.gd"
 
 [debug]
 

@@ -4,7 +4,8 @@ extends PlayerState
 
 func enter() -> void:
 	super.enter()
-	player.double_jump = false
+	# PLANTED BUG (pixel set): the double jump is never used up, so every fall allows another one
+	pass
 	player.velocity.y = player.jump_velocity
 
 

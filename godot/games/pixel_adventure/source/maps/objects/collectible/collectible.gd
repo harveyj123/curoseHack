@@ -50,5 +50,7 @@ func _on_body_entered(body: Node2D) -> void:
 		collected = true
 		$AnimationPlayer.play("collected")
 		Events.fruit_collected.emit()
+		if fruit == Fruits.CHERRIES:  # PLANTED BUG (pixel set): cherries come in pairs, so they count twice
+			Events.fruit_collected.emit()
 		await $AnimationPlayer.animation_finished
 		queue_free()
