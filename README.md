@@ -169,8 +169,14 @@ classes not found yet) and the gatekeeper kept it, training score 2.5 -> 14.2 po
 losses, 1 tie on the paired sessions, P(better) 1.00). Two earlier night-1/2 attempts failed their own tool tests
 before a restart. Held-out, on Dodge the Creeps (bug set C, never trained on, 8 sessions): the trained crew
 finds 0.875 verified bugs per session vs 0.375 for the starting crew (4 better, 0 worse, 4 tied; 90% CI of the
-gain [+2.5, +7.5] points, P(better) 0.997; `demo/heldout_godot_hunt_dodge.md`). The platformer held-out eval
-(bug set B) lands in `demo/heldout_godot_hunt_heldout.json` when it finishes.
+gain [+2.5, +7.5] points, P(better) 0.997; `demo/heldout_godot_hunt_dodge.md`). On the unseen platformer (bug set B,
+8 sessions): 1.5 verified bugs per session vs 0.25 (8 better, 0 worse, 0 tied; 90% CI of the gain [+10, +15]
+points, P(better) 1.0; `demo/heldout_godot_hunt_heldout.md`).
+
+| Held-out game (never trained on) | Starting crew | Trained crew (run 2) | Sessions better / worse / tied |
+|---|---|---|---|
+| Platformer, bug set B | 0.25 bugs/session | **1.50** bugs/session | 8 / 0 / 0 |
+| Dodge the Creeps, bug set C | 0.375 bugs/session | **0.875** bugs/session | 4 / 0 / 4 |
 
 Run 1 (kept for honesty in `demo/run1/`: lineage, genomes and held-out files; 6 nights, 8 paired training sessions per night, score = 10 per verified bug):
 
