@@ -99,6 +99,37 @@ back into the next prompt, so each round proposes kinds of rules the developer h
 - Optional `res://qa_crew.json` per game: player class, score location, collectibles, bounds, spawn
   points, key letters. Without it the crew guesses from the InputMap.
 
+## Architecture
+
+```
+ Godot editor                                   Python crew runner (respawn/)                 Crusoe Managed Inference
+ ┌──────────────────────────────┐   spawns     ┌───────────────────────────────────────┐      ┌──────────────────────────┐
+ │ QA Crew dock (qa_dock.gd)    │ ───────────► │ qa.py hunt / rules / check            │      │ Hunters: Nemotron Nano,  │
+ │  Bugs · Rules · Crew · Run   │ ◄─ stdout ── │ harness.py: one tool-calling loop per │ ◄──► │ Lightning (play + tools) │
+ │  How-it-works stepper        │   reports    │   hunter, crew files = genome         │      │ Coach + rule writer:     │
+ └──────────────────────────────┘              │ envs/godot_hunt.py: env + oracle      │      │ Nemotron Super           │
+ ┌──────────────────────────────┐  TCP JSON    │ rules.py: house rules -> checks       │      └──────────────────────────┘
+ │ Game + QA bridge autoload    │ ◄──────────► │ godot/client.py: launch game, bridge  │
+ │ (qa_bridge.gd): act, state,  │  per-frame   │ qa.py: minimize, replay-verify, GIF,  │
+ │ reset, map, screenshot; the  │  trace       │   plain-English + AI-agent report     │
+ │ engine is frozen between     │              └───────────────────────────────────────┘
+ │ commands: replays are exact  │                 Nightly loop (evolve.py)
+ └──────────────────────────────┘                 play train sessions -> coach proposes ONE change
+                                                  (playbook / new sandboxed tool) -> gate.py paired
+                                                  bootstrap keeps it only if verified bugs rise ->
+                                                  lineage.jsonl; stop after 3 blocked nights (--patience)
+                                                  evaluate.py: version 0 vs latest on unseen games
+```
+
+- **Dock** (`godot/qa_crew/qa_dock.gd`, `qa_plugin.gd`): the UI. It runs the crew as a subprocess and reads its reports and lineage files.
+- **Bridge** (`qa_bridge.gd`): an autoload inside the game. It presses input actions for N physics frames and returns a per-frame trace (position, velocity, floor and wall flags, tunnelling and overlap checks, score, errors). Fixed physics FPS and a frozen engine between commands make (seed, inputs) an exact replay. Watch live paces it to real time in a visible window.
+- **Hunters** (`harness.py`): small Nemotron models play through `play("R30 RJ20 W5")` and free helper tools, which are Python files run in a sandbox (`sandbox.py`).
+- **Oracle and house rules** (`envs/godot_hunt.py`, `rules.py`): code that confirms bugs from the trace. It covers the built-in classes plus plain-English rules that Nemotron Super compiles into checks. A model can't claim a bug that doesn't replay.
+- **Replay verifier and reports** (`qa.py`): shrinks the input sequence, replays it to confirm the bug, records a GIF, and writes a plain-English report with a "Details for AI agents" section and a `check` command that passes once the bug is fixed.
+- **Crew files (genome)** (`genome.py`): `playbook.md` + `tools/*.py` + `roles.json`, as shipped in `demo/genomes/`.
+- **Coach, gate, lineage** (`coach.py`, `gate.py`, `evolve.py`): each night Super reads the logs and proposes one change. The gate runs it on the same paired sessions as the current best crew and keeps it only if it finds more verified bugs. Every decision is logged to `lineage.jsonl`.
+- **Held-out test** (`evaluate.py`): compares the starting crew with the trained crew on games and bug sets the crew never trained on.
+
 ## Why Nemotron
 
 One open model family covers every role, served from one Crusoe endpoint (prices in USD per 1M tokens: input / output / cached input):
@@ -147,7 +178,7 @@ Pillow, e.g. `<crew folder>/.venv/bin/python3` (picked up automatically when it 
 $GODOT_BIN --headless --import --path godot/games/platformer_train
 
 # evolve the crew on bug set A (train), 8 nights, 8 paired sessions per night
-python -m respawn evolve --env godot_hunt --run runs/hunt1 --gens 8 --train 0-7
+python -m respawn evolve --env godot_hunt --run runs/hunt2 --gens 10 --train 0-11   # stops early after 3 blocked nights
 python -m respawn lineage --run runs/hunt1
 
 # held-out: night-0 crew vs best crew on bug sets B and C (never seen in training)

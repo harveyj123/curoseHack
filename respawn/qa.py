@@ -398,7 +398,9 @@ def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, player
     from respawn.harness import run_episode
     from respawn.llm import LIGHTNING, LLM, NANO, SUPER
     project = os.path.abspath(project)
-    name = {"platformer_train": "godot_hunt", "platformer_heldout": "godot_hunt_heldout", "dodge_heldout": "godot_hunt_dodge"}.get(
+    name = {"platformer_train": "godot_hunt", "platformer_heldout": "godot_hunt_heldout", "dodge_heldout": "godot_hunt_dodge",
+            "pixel_adventure": "godot_hunt_pixel", "pixel_clean": "godot_hunt_pixel_clean",
+            "ev01_prefix": "godot_hunt_ev01_prefix", "ev01_fixed": "godot_hunt_ev01_fixed"}.get(
         os.path.basename(os.path.normpath(project)))
     if name is None:  # any other Godot project with the bridge installed
         from respawn.envs.godot_hunt import _make

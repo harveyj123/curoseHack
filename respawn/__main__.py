@@ -37,6 +37,8 @@ def main(argv=None):
     e.add_argument("--min-p", type=float, default=0.8)
     e.add_argument("--start", help="genome dir to start from")
     e.add_argument("--no-rerun", action="store_true", help="do not re-test the champion every night")
+    e.add_argument("--patience", type=int, default=3,
+                   help="stop after this many blocked nights in a row (the crew has plateaued); 0 = never")
     v = sub.add_parser("eval")
     v.add_argument("--run", required=True)
     v.add_argument("--seeds", default="1000-1011")
@@ -57,7 +59,7 @@ def main(argv=None):
         from respawn.evolve import evolve
         from respawn.genome import Genome
         evolve(llm, a.env, a.run, a.gens, seeds(a.train), players, a.coach, a.parallel,
-               Genome.load(a.start) if a.start else None, a.min_delta, a.min_p, a.thinking, not a.no_rerun)
+               Genome.load(a.start) if a.start else None, a.min_delta, a.min_p, a.thinking, not a.no_rerun, a.patience)
     elif a.cmd == "eval":
         from respawn.evaluate import heldout, markdown
         out = heldout(llm, a.run, seeds(a.seeds), players, a.parallel, a.record, a.all, a.thinking, env=a.env)
