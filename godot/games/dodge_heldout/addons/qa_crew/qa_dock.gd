@@ -26,6 +26,7 @@ var python_edit := LineEdit.new()
 var seeds_edit := LineEdit.new()
 var watch_check := CheckBox.new()
 var run_button := Button.new()
+var learned_link := LinkButton.new()
 var output := RichTextLabel.new()
 # Bugs tab
 var bug_count := Label.new()
@@ -478,6 +479,11 @@ func _build_run() -> Control:
 	run_button.add_theme_color_override("font_color", Color.WHITE)
 	run_button.add_theme_color_override("font_hover_color", Color.WHITE)
 	root.add_child(run_button)
+	# Every hunt runs with the crew the nightly loop trained; make that visible next to the Run button.
+	learned_link.underline = LinkButton.UNDERLINE_MODE_ON_HOVER
+	learned_link.tooltip_text = "Open the Crew tab: how this crew learned, night by night"
+	learned_link.pressed.connect(func(): tabs.current_tab = _tab_index("Crew"))
+	root.add_child(learned_link)
 	run_status.text = "Idle. Press Run QA crew to start a hunt."
 	run_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(run_status)
@@ -584,12 +590,31 @@ func _update_genome_preview() -> void:
 	var g := genome_edit.text.strip_edges()
 	if g == "none":
 		genome_preview.text = _genome_summary("")
+		learned_link.text = _learned_line("")
 		return
 	if g == "":
 		g = _newest_demo_genome()
 	if g != "" and not g.is_absolute_path():
 		g = repo_edit.text.path_join(g)
 	genome_preview.text = _genome_summary(g)
+	learned_link.text = _learned_line(g)
+
+func _learned_line(gdir: String) -> String:
+	if gdir == "" or not DirAccess.dir_exists_absolute(gdir):
+		return "This run uses the untrained crew (version 0). See how the crew learns →"
+	var lin := gdir.get_base_dir().get_base_dir().path_join("lineage.jsonl")
+	var kept := 0
+	var nights := 0
+	if FileAccess.file_exists(lin):
+		for line in FileAccess.get_file_as_string(lin).split("\n", false):
+			var d = JSON.parse_string(line)
+			if d is Dictionary and int(d.get("gen", 0)) > 0:
+				nights += 1
+				kept += 1 if d.get("accepted", false) else 0
+	var ver := gdir.get_file().trim_prefix("gen_").lstrip("0")
+	if nights == 0:
+		return "This run uses crew version %s. See how it learned →" % (ver if ver != "" else "0")
+	return "This run uses the learned crew: version %s, from %d kept change(s) in %d night(s) of practice. See how it learned →" % [ver if ver != "" else "0", kept, nights]
 
 func _newest_demo_genome() -> String:
 	# The trained crew shipped with the repo (demo/genomes/gen_NNN), so a fresh checkout hunts with it by default.
