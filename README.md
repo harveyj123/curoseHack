@@ -27,7 +27,23 @@ night. Proof of improvement is measured on games and bug sets the crew **never t
 | Oracle | code | Confirms bugs from the trace (no model can claim a bug that does not replay) |
 
 Bug classes the oracle confirms: `crash` (GDScript error), `clip` (through/inside solid geometry),
-`infinite_jump`, `out_of_bounds`, `dupe` (score above collectibles taken), `ghost_score` (score while dead).
+`infinite_jump`, `out_of_bounds`, `dupe` (score above collectibles taken), `ghost_score` (score while dead),
+plus the developer's own **house rules** (below).
+
+### House rules: tell the crew what must never happen
+
+Type rules in plain English in the dock's **Rules** tab ("The robot should never pass through walls",
+"Coins can't be collected twice"). **Compile** has Nemotron Super write each one as a small Python check,
+`def check(prev, cur, ctx)`, run by the oracle on every physics frame (position, velocity, floor/wall,
+tunnel/inside flags; score, collectibles, bounds, the frame's events, and a per-rule memory). Before a check
+is accepted it must pass a strict AST allowlist (no imports, no `while`, no dunders, a tiny builtins set),
+stay silent on a recorded clean run (`respawn/envs/godot_rules_fixture.json`) and fire on its own violating
+example; failures go back to the model with the error (up to 2 retries). The developer reviews the code in the
+dock. QA hunts then show the hunters the rules to break, and a violation is a verified bug `rule:<id>` with
+the same minimized replay, GIF, report and `qa check` as the built-in classes (the report keeps the rule's
+code, so `check` judges the same rule later). Rules live in `res://qa_rules.json`; they apply to QA hunts
+only, never to evolution or held-out scoring. `platformer_heldout` ships three compiled rules and a sample
+rule report. CLI: `python -m respawn.qa rules compile|list|test --project <game>`.
 
 ## How the crew plays a Godot game
 
@@ -39,13 +55,15 @@ Bug classes the oracle confirms: `crash` (GDScript error), `clip` (through/insid
   `--fixed-fps 60`, so a run is exactly reproducible from (seed, inputs). `map` samples a collision map,
   `screenshot`/`capture_every` save frames when the game runs on a virtual display (Xvfb).
 - `plugin.cfg`, `qa_plugin.gd`, `qa_dock.gd`: the **QA Crew** editor dock (enabled in
-  `platformer_heldout` and `dodge_heldout`, which ship three sample reports in `qa_reports/`). Three tabs:
+  `platformer_heldout` and `dodge_heldout`, which ship sample reports in `qa_reports/`). Four tabs:
   - **Bugs**: every report in `res://qa_reports/` with a thumbnail, bug class and a "reproduces" mark.
     Selecting one plays the failure animation (a sprite sheet of the GIF frames) and shows expected vs
     actual, the minimal repro, the state at failure and where to look. **Open code** jumps to the suspect
     script line, **Replay in game** runs the game in the editor and plays the exact repro at normal speed
     (the bridge reads `res://qa_reports/.replay.json` once, no TCP client needed), and **Check fix** re-runs
     the repro headless: green *Fixed* or red *Still reproduces*.
+  - **Rules**: the game's house rules: add, enable/disable, delete, **Compile with Nemotron**, and review
+    each rule's compiled check.
   - **Crew**: how the crew learned, from a run's `lineage.jsonl`: score per night (filled dots = kept
     changes on the champion line, hollow = rejected candidates), each night's change and verdict, and
     version 0 vs latest on unseen games when `heldout_*.json` files exist.
@@ -57,6 +75,7 @@ Bug classes the oracle confirms: `crash` (GDScript error), `clip` (through/insid
     Try it offline: `python -m respawn.qa hunt --project godot/games/platformer_heldout --seeds 0 --mock --watch`.
 
 ![QA Crew dock, Bugs tab](docs/dock_bugs.png)
+![QA Crew dock, Rules tab](docs/dock_rules.png)
 ![QA Crew dock, Crew tab](docs/dock_crew.png)
 ![Watch live: a hunter playing with its caption bar](docs/watch_live.png)
 - Optional `res://qa_crew.json` per game: player class, score location, collectibles, bounds, spawn
@@ -88,7 +107,8 @@ respawn/                 the Version N+1 loop (game-agnostic)
   envs/godot_hunt.py     Godot bug-hunting env + oracle + replay verifier
   godot/client.py        launches Godot headless (or on Xvfb) and talks to the bridge
   godot/evidence.py      rendered replay -> GIF + snapshot
-  qa.py                  hunt -> minimized, fix-ready reports; `check` command
+  qa.py                  hunt -> minimized, fix-ready reports; `check` command; `rules compile`
+  rules.py               house rules: Nemotron-compiled per-frame checks, AST allowlist, fixture test
 godot/qa_crew/           the Godot addon (bridge + editor dock)
 godot/games/             games under test (upstream demos + our planted bugs)
 runs/                    evolution runs (lineage.jsonl, genomes, trajectories)

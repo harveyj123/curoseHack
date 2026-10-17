@@ -20,7 +20,7 @@ from respawn.godot.client import GodotGame
 REPORT_SCHEMA = {
     "id": "stable hash of class + project + minimal repro",
     "title": "one line",
-    "bug_class": "crash | clip | infinite_jump | out_of_bounds | dupe | ghost_score",
+    "bug_class": "crash | clip | infinite_jump | out_of_bounds | dupe | ghost_score | rule:<id> (a house rule)",
     "game": "project path",
     "expected": "what should happen",
     "actual": "what happened (oracle evidence)",
@@ -62,18 +62,22 @@ def tokens_of(segs, letters):
 class Reproducer:
     """Runs (seed, plays) in a game process and reports which bug classes fire. Reuses one process."""
 
-    def __init__(self, project):
+    def __init__(self, project, extra_rules: list | None = None):
+        from respawn import rules as house_rules
         from respawn.envs.godot_hunt import Oracle
         self.Oracle = Oracle
         self.project = project
         self.g = GodotGame(project)
         self.runs = 0
+        self.rules = house_rules.load_enabled(self.g.project)  # [] without res://qa_rules.json
+        for r in extra_rules or []:  # e.g. the rule stored in a report, even if it was since edited/disabled
+            self.rules = [x for x in self.rules if x["id"] != r["id"]] + [r]
 
     def run(self, seed, plays):
         self.runs += 1
         st = self.g.call("reset", seed=seed)
         self.g.take_errors()
-        o = self.Oracle(self.g.info.get("config") or {}, st)
+        o = self.Oracle(self.g.info.get("config") or {}, st, self.rules)
         last = None
         for segs in plays:
             if not segs:
@@ -127,7 +131,23 @@ def minimize(rep: Reproducer, seed: int, plays: list, cls: str, budget: int = 40
     return plays
 
 
+def safe_class(cls: str) -> str:
+    """Bug class as used in file names: 'rule:no_walls' -> 'rule-no_walls'."""
+    return cls.replace(":", "-")
+
+
+def severity(cls: str) -> str:
+    """One place for bug severity (the editor dock mirrors this table)."""
+    if cls == "crash":
+        return "high"
+    if cls in ("clip", "out_of_bounds") or cls.startswith("rule:"):
+        return "medium"
+    return "low"
+
+
 def build_report(project: str, finding: dict, out_dir: str, evidence: bool = True, budget: int = 40) -> dict:
+    from respawn import rules as house_rules
+    rule = house_rules.rule_of(project, finding["class"])
     rep = Reproducer(project)
     try:
         cfg = rep.g.info.get("config") or {}
@@ -145,14 +165,19 @@ def build_report(project: str, finding: dict, out_dir: str, evidence: bool = Tru
     if finding["class"] == "crash" and " at " in (hit.get("detail") or ""):
         suspects.append(hit["detail"].split(" at ", 1)[1])
     if (st.get("player") or {}).get("script"):
-        suspects.append(f"{st['player']['script']}: {LIKELY.get(finding['class'], 'player logic')}")
+        likely = LIKELY.get(finding["class"]) or ("the game logic this house rule is about" if rule else "player logic")
+        suspects.append(f"{st['player']['script']}: {likely}")
     rid = hashlib.sha1(json.dumps([finding["class"], project, finding["seed"], plays]).encode()).hexdigest()[:8]
+    sc = safe_class(finding["class"])
+    title = (f"House rule {finding['class'][5:]}: {hit.get('detail', '')[:80]}" if rule
+             else f"{finding['class'].replace('_', ' ').capitalize()}: {hit.get('detail', '')[:90]}")
     report = {
-        "id": f"{finding['class']}-{rid}",
-        "title": f"{finding['class'].replace('_', ' ').capitalize()}: {hit.get('detail', '')[:90]}",
+        "id": f"{sc}-{rid}",
+        "title": title,
         "bug_class": finding["class"],
+        "severity": severity(finding["class"]),
         "game": os.path.abspath(project),
-        "expected": EXPECTED.get(finding["class"], ""),
+        "expected": EXPECTED.get(finding["class"], "") or (f"House rule: {rule['text']}" if rule else ""),
         "actual": hit.get("detail", ""),
         "repro": {"seed": finding["seed"], "plays": plays},
         "repro_tokens": [tokens_of(p, letters) for p in plays],
@@ -163,8 +188,10 @@ def build_report(project: str, finding: dict, out_dir: str, evidence: bool = Tru
         "state_at_failure": {k: at.get(k) for k in ("x", "y", "vx", "vy", "floor", "wall", "visible") if k in at} | {"score": st.get("score")},
         "suspects": suspects,
         "evidence": {},
-        "check": f"python -m respawn.qa check {os.path.join(out_dir, '')}{finding['class']}-{rid}.json",
+        "check": f"python -m respawn.qa check {os.path.join(out_dir, '')}{sc}-{rid}.json",
     }
+    if rule:  # keep the exact check with the report, so `qa check` judges the same rule later
+        report["rule"] = {"id": rule.get("id"), "text": rule.get("text"), "code": rule.get("code")}
     os.makedirs(out_dir, exist_ok=True)
     if evidence and reproduced:
         from respawn.godot.evidence import capture
@@ -212,7 +239,12 @@ def _game_dir(game: str, report_path: str) -> str:
 
 def check(path: str) -> int:
     r = json.load(open(path))
-    rep = Reproducer(_game_dir(r["game"], path))
+    extra = []
+    if r.get("rule", {}).get("code"):
+        from respawn import rules as house_rules
+        extra = [{"id": r["rule"]["id"], "text": r["rule"].get("text", ""),
+                  "fn": house_rules.compile_check(r["rule"]["code"], r["rule"]["id"])}]
+    rep = Reproducer(_game_dir(r["game"], path), extra)
     try:
         o, _, _ = rep.run(r["repro"]["seed"], r["repro"]["plays"])
     finally:
@@ -226,7 +258,7 @@ def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, player
          watch=False, mock=False) -> list:
     from respawn import env as envmod
     from respawn.genome import Genome
-    from respawn.harness import run_episode, run_many
+    from respawn.harness import run_episode
     from respawn.llm import LIGHTNING, LLM, NANO, SUPER
     project = os.path.abspath(project)
     name = {"platformer_train": "godot_hunt", "platformer_heldout": "godot_hunt_heldout", "dodge_heldout": "godot_hunt_dodge"}.get(
@@ -239,24 +271,38 @@ def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, player
     os.makedirs(out_dir, exist_ok=True)
     g = Genome.load(genome_dir) if genome_dir else Genome()
     llm = LLM(mock=mock or None)
+    import threading
+    done, lock = [0], threading.Lock()
+    print(f"PROGRESS hunt 0/{len(seeds)}", flush=True)  # parsed by the editor dock
+
+    def tick(ep):
+        with lock:
+            done[0] += 1
+            print(f"PROGRESS hunt {done[0]}/{len(seeds)} bugs={','.join(ep.outcome.get('bugs', [])) or '-'}", flush=True)
+        return ep
     if watch:  # the first seed plays in a visible real-time window with captions; the rest stay headless
         from concurrent.futures import ThreadPoolExecutor
         short = {NANO: "Nano", LIGHTNING: "Lightning", SUPER: "Super"}
         label = "Hunter " + short.get(players[seeds[0] % len(players)], players[seeds[0] % len(players)].split("/")[-1])
-        kw = lambda s: {"watch": True, "watch_label": label} if s == seeds[0] else {}
+        kw = lambda s: {"watch": True, "watch_label": label, "house_rules": True} if s == seeds[0] else {"house_rules": True}
         with ThreadPoolExecutor(min(4, len(seeds))) as ex:
-            eps = list(ex.map(lambda s: run_episode(llm, name, s, g, players, env_kwargs=kw(s)), seeds))
+            eps = list(ex.map(lambda s: tick(run_episode(llm, name, s, g, players, env_kwargs=kw(s))), seeds))
     else:
-        eps = run_many(llm, name, seeds, g, players, parallel=min(4, len(seeds)))
-    seen, reports = set(), []
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max(1, min(4, len(seeds)))) as ex:
+            eps = list(ex.map(lambda s: tick(run_episode(llm, name, s, g, players, env_kwargs={"house_rules": True})), seeds))
+    seen, reports, todo = set(), [], []
     for ep in eps:
         for f in ep.outcome.get("findings", []):
-            if f["class"] in seen:
-                continue
-            seen.add(f["class"])
-            r = build_report(os.path.abspath(project), f, out_dir, evidence)
-            print(f"[{r['bug_class']}] {r['title']}  repro {r['repro_tokens']}  -> {r['id']}.md", flush=True)
-            reports.append(r)
+            if f["class"] not in seen:
+                seen.add(f["class"])
+                todo.append(f)
+    print(f"PROGRESS verify 0/{len(todo)}", flush=True)
+    for i, f in enumerate(todo):
+        r = build_report(os.path.abspath(project), f, out_dir, evidence)
+        print(f"[{r['bug_class']}] {r['title']}  repro {r['repro_tokens']}  -> {r['id']}.md", flush=True)
+        print(f"PROGRESS verify {i + 1}/{len(todo)}", flush=True)
+        reports.append(r)
     json.dump({"project": project, "genome": genome_dir, "seeds": seeds, "reports": [r["id"] for r in reports],
                "time": time.strftime("%Y-%m-%d %H:%M:%S")}, open(os.path.join(out_dir, "index.json"), "w"), indent=2)
     return reports
@@ -278,9 +324,24 @@ def main(argv=None):
     h.add_argument("--mock", action="store_true", help="offline: scripted hunter, no API calls")
     c = sub.add_parser("check")
     c.add_argument("report")
+    r = sub.add_parser("rules", help="house rules: compile plain-English rules into oracle checks")
+    r.add_argument("action", choices=["compile", "list", "test"])
+    r.add_argument("--project", required=True)
+    r.add_argument("--force", action="store_true", help="recompile rules that already have code")
+    r.add_argument("--mock", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "check":
         return check(a.report)
+    if a.cmd == "rules":
+        from respawn import rules as house_rules
+        if a.action == "compile":
+            out = house_rules.compile_project(a.project, mock=a.mock, force=a.force)
+            return 0 if out and all(x.get("code") and not x.get("error") for x in out) else 1
+        for x in house_rules.load_all(os.path.abspath(a.project)):
+            prob = house_rules.test_rule(x["code"], x["id"], None) if a.action == "test" and x.get("code") else None
+            print(f"{'on ' if x.get('enabled', True) else 'off'} {x.get('id', '?'):28} {'compiled' if x.get('code') else 'NOT COMPILED'}"
+                  f"{'  ' + prob if prob else ''}  {x['text']}")
+        return 0
     hunt(a.project, a.genome, parse_seeds(a.seeds), a.out, a.players.split(","), not a.no_evidence, a.watch, a.mock)
     return 0
 

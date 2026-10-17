@@ -1,7 +1,8 @@
 @tool
 extends VBoxContainer
 ## Editor dock: run the QA crew, read its bug reports, replay and check them, and see how the crew learned.
-## Tabs: Bugs (reports in res://qa_reports), Crew (lineage of a run), Run (settings + live log).
+## Tabs: Bugs (reports in res://qa_reports), Rules (house rules in res://qa_rules.json), Crew (lineage of a run),
+## Run (settings + live log).
 ## The key is stored in EditorSettings (per machine), never in the project.
 
 const KEY_SETTING := "qa_crew/crusoe_api_key"
@@ -11,6 +12,7 @@ const RUNDIR_SETTING := "qa_crew/run_folder"
 const PYTHON_SETTING := "qa_crew/python"
 const WATCH_SETTING := "qa_crew/watch_live"
 const REPORTS := "res://qa_reports"
+const RULES_FILE := "res://qa_rules.json"
 const REPLAY_FILE := "res://qa_reports/.replay.json"
 const GD_REF := "res://[\\w./-]+\\.gd(?::(\\d+))?"
 const HELDOUT_NAMES := {"godot_hunt_heldout": "Platformer, bug set B", "godot_hunt_dodge": "Dodge, bug set C"}
@@ -46,6 +48,15 @@ var crew_summary := RichTextLabel.new()
 var chart := Control.new()
 var nights_text := RichTextLabel.new()
 var heldout_text := RichTextLabel.new()
+# Rules tab
+var rule_input := TextEdit.new()
+var rules_list := VBoxContainer.new()
+var rules_log := RichTextLabel.new()
+var rules_count := Label.new()
+var compile_button := Button.new()
+var _rules: Array = []
+var _rule_open := {}
+var _compile_job = null
 
 var _reports: Array = []
 var _sel := -1
@@ -65,13 +76,24 @@ func _ready() -> void:
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(tabs)
 	tabs.add_child(_build_bugs())
+	tabs.add_child(_build_rules())
 	tabs.add_child(_build_crew())
 	tabs.add_child(_build_run())
 	_anim_timer.wait_time = 0.08
 	_anim_timer.timeout.connect(_anim_tick)
 	add_child(_anim_timer)
 	_refresh_bugs()
+	_load_rules()
 	_load_crew()
+	# For docs screenshots: QA_DOCK_TAB=Rules opens that tab (and the first rule's check).
+	var want := OS.get_environment("QA_DOCK_TAB")
+	if want != "":
+		for i in tabs.get_tab_count():
+			if tabs.get_tab_control(i).name == want:
+				tabs.current_tab = i
+		if want == "Rules" and _rules.size() > 0:
+			_rule_open[str(_rules[0].get("id", 0))] = true
+			_render_rules()
 
 # ------------------------------------------------------------------ layout
 func _section(text: String) -> Label:
@@ -595,6 +617,219 @@ func _check_done(id: String, code: int, out: String) -> void:
 		_set_check("[bgcolor=#8a2a26][color=white] ✘ Still reproduces [/color][/bgcolor]  the repro still triggers the bug")
 	else:
 		_set_check("[color=orange]Check failed (exit %d):[/color]\n[code]%s[/code]" % [code, _esc(out.strip_edges().right(600))])
+
+# ------------------------------------------------------------------ Rules tab
+func _build_rules() -> Control:
+	var s := EditorInterface.get_editor_scale()
+	var scroll := ScrollContainer.new()
+	scroll.name = "Rules"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var root := VBoxContainer.new()
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(root)
+	var intro := Label.new()
+	intro.text = "House rules: write what must never happen in plain English. Nemotron turns each rule into a check the oracle runs every frame, and the hunters try to break it."
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	intro.add_theme_color_override("font_color", _col("font_disabled_color"))
+	root.add_child(intro)
+	rule_input.placeholder_text = "e.g. The robot should never pass through walls\n(one rule per line)"
+	rule_input.custom_minimum_size = Vector2(0, 64) * s
+	rule_input.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	root.add_child(rule_input)
+	var bar := HBoxContainer.new()
+	var add := Button.new()
+	add.text = "Add rule"
+	add.pressed.connect(_add_rules)
+	bar.add_child(add)
+	compile_button.text = "Compile with Nemotron"
+	compile_button.tooltip_text = "Nemotron Super writes a check for every rule that has none, then it is tested on a clean recorded run"
+	compile_button.pressed.connect(_compile_rules)
+	bar.add_child(compile_button)
+	rules_count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rules_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	bar.add_child(rules_count)
+	root.add_child(bar)
+	root.add_child(_rich(rules_log))
+	rules_log.visible = false
+	rules_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rules_list.add_theme_constant_override("separation", int(6 * s))
+	root.add_child(rules_list)
+	return scroll
+
+func _load_rules() -> void:
+	_rules.clear()
+	if FileAccess.file_exists(RULES_FILE):
+		var d = JSON.parse_string(FileAccess.get_file_as_string(RULES_FILE))
+		if typeof(d) == TYPE_ARRAY:
+			for r in d:
+				if typeof(r) == TYPE_DICTIONARY and str(r.get("text", "")) != "":
+					_rules.append(r)
+	_render_rules()
+
+func _save_rules() -> void:
+	var f := FileAccess.open(RULES_FILE, FileAccess.WRITE)
+	if f == null:
+		push_warning("QA Crew: cannot write %s" % RULES_FILE)
+		return
+	f.store_string(JSON.stringify(_rules, "  "))
+	f.close()
+
+func _rule_state(r: Dictionary) -> Array:
+	# [label, color]
+	if str(r.get("error", "")) != "" and r.get("error") != null:
+		return ["✘ compile failed", Color("#e8615a")]
+	if str(r.get("code", "")) != "":
+		return ["✔ compiled", Color("#5fc77a")]
+	return ["○ not compiled", Color("#e0a040")]
+
+func _render_rules() -> void:
+	var s := EditorInterface.get_editor_scale()
+	for c in rules_list.get_children():
+		c.queue_free()
+	var n_on := 0
+	for r in _rules:
+		n_on += 1 if r.get("enabled", true) and str(r.get("code", "")) != "" else 0
+	rules_count.text = "%d rule(s), %d active" % [_rules.size(), n_on] if _rules.size() > 0 else ""
+	if _rules.is_empty():
+		var e := Label.new()
+		e.text = "No house rules yet: type one above (for example \"Coins can't be collected twice\"), press Add rule, then Compile."
+		e.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		e.add_theme_color_override("font_color", _col("font_disabled_color"))
+		rules_list.add_child(e)
+		return
+	for i in _rules.size():
+		var r: Dictionary = _rules[i]
+		var panel := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0, 0, 0, 0.18)
+		sb.set_corner_radius_all(int(4 * s))
+		sb.set_content_margin_all(6 * s)
+		panel.add_theme_stylebox_override("panel", sb)
+		var vb := VBoxContainer.new()
+		panel.add_child(vb)
+		var hb := HBoxContainer.new()
+		vb.add_child(hb)
+		var on := CheckBox.new()
+		on.button_pressed = r.get("enabled", true)
+		on.tooltip_text = "Enabled: the oracle checks this rule and the hunters try to break it"
+		on.toggled.connect(_toggle_rule.bind(i))
+		hb.add_child(on)
+		var txt := Label.new()
+		txt.text = str(r.get("text", ""))
+		txt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if not r.get("enabled", true):
+			txt.add_theme_color_override("font_color", _col("font_disabled_color"))
+		hb.add_child(txt)
+		var del := Button.new()
+		del.text = "Delete"
+		del.flat = true
+		del.pressed.connect(_delete_rule.bind(i))
+		hb.add_child(del)
+		var meta := HBoxContainer.new()
+		vb.add_child(meta)
+		var st := _rule_state(r)
+		var stl := Label.new()
+		stl.text = st[0]
+		stl.add_theme_color_override("font_color", st[1])
+		meta.add_child(stl)
+		var info := Label.new()
+		var bits := []
+		if str(r.get("id", "")) != "":
+			bits.append("rule:" + str(r["id"]))
+		if str(r.get("compiled_by", "")) != "" and str(r.get("code", "")) != "":
+			bits.append("by " + str(r["compiled_by"]))
+		info.text = "   ".join(bits)
+		info.add_theme_color_override("font_color", _col("font_disabled_color"))
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info.clip_text = true
+		meta.add_child(info)
+		var key := str(r.get("id", i))
+		if str(r.get("code", "")) != "":
+			var show := Button.new()
+			show.toggle_mode = true
+			show.flat = true
+			show.text = "Hide check" if _rule_open.get(key, false) else "Show check"
+			show.button_pressed = _rule_open.get(key, false)
+			show.toggled.connect(_toggle_code.bind(key))
+			meta.add_child(show)
+		if r.get("error") != null and str(r.get("error", "")) != "":
+			var err := Label.new()
+			err.text = str(r["error"]).left(300)
+			err.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			err.add_theme_color_override("font_color", Color("#e8615a"))
+			vb.add_child(err)
+		if _rule_open.get(key, false) and str(r.get("code", "")) != "":
+			var code := TextEdit.new()
+			code.text = str(r["code"]).strip_edges()
+			code.editable = false
+			code.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+			code.custom_minimum_size = Vector2(0, (code.text.count("\n") * 1.8 + 3) * 19) * s
+			code.add_theme_font_override("font", EditorInterface.get_editor_theme().get_font("source", "EditorFonts"))
+			code.add_theme_font_size_override("font_size", int(12 * s))
+			vb.add_child(code)
+		rules_list.add_child(panel)
+
+func _toggle_rule(on: bool, i: int) -> void:
+	_rules[i]["enabled"] = on
+	_save_rules()
+	_render_rules.call_deferred()
+
+func _delete_rule(i: int) -> void:
+	_rules.remove_at(i)
+	_save_rules()
+	_render_rules.call_deferred()
+
+func _toggle_code(on: bool, key: String) -> void:
+	_rule_open[key] = on
+	_render_rules.call_deferred()
+
+func _add_rules() -> void:
+	var added := 0
+	for line in rule_input.text.split("\n", false):
+		var t := line.strip_edges()
+		if t != "":
+			_rules.append({"text": t, "enabled": true, "code": "", "compiled_by": ""})
+			added += 1
+	if added == 0:
+		return
+	rule_input.text = ""
+	_save_rules()
+	_render_rules()
+	_rules_log("Added %d rule(s). Press [b]Compile with Nemotron[/b] to turn them into checks." % added)
+
+func _rules_log(t: String, clear := false) -> void:
+	if clear:
+		rules_log.text = ""
+	rules_log.visible = true
+	rules_log.append_text(t + "\n")
+
+func _compile_rules() -> void:
+	if _compile_job != null:
+		return
+	if repo_edit.text.strip_edges() == "":
+		_rules_log("[color=orange]Set the crew folder in the Run tab first.[/color]", true)
+		return
+	if key_edit.text.strip_edges() == "":
+		_rules_log("[color=orange]Set the Crusoe API key in the Run tab first.[/color]", true)
+		return
+	_save_rules()
+	_rules_log("[b]Compiling[/b] with Nemotron Super...", true)
+	var args := PackedStringArray(["CRUSOE_API_KEY=" + key_edit.text, _python(), "-m", "respawn.qa", "rules", "compile",
+		"--project", ProjectSettings.globalize_path("res://")])
+	_compile_job = _spawn(args, func(l: String): _rules_log(_esc(l)), _compile_done)
+	if _compile_job == null:
+		_rules_log("[color=red]Could not start %s.[/color]" % _esc(_python()))
+		return
+	compile_button.disabled = true
+	compile_button.text = "Compiling..."
+
+func _compile_done(code: int, _out: String) -> void:
+	_compile_job = null
+	compile_button.disabled = false
+	compile_button.text = "Compile with Nemotron"
+	_rules_log("[color=%s]%s[/color]" % ["#5fc77a" if code == 0 else "#e8615a", "Done." if code == 0 else "Some rules did not compile (exit %d)." % code])
+	_load_rules()
 
 # ------------------------------------------------------------------ Crew tab
 func _run_path() -> String:

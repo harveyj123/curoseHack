@@ -11,6 +11,7 @@ import json
 import os
 import re
 
+from respawn import rules as house_rules_mod
 from respawn import sandbox
 from respawn.env import register
 from respawn.godot.client import GodotGame
@@ -43,7 +44,7 @@ def parse_inputs(text: str, controls: dict) -> list:
 class Oracle:
     """Judges bug classes from bridge traces. Knows the game's public rules (config), not its code."""
 
-    def __init__(self, cfg: dict, start_state: dict):
+    def __init__(self, cfg: dict, start_state: dict, rules: list | None = None):
         self.max_air_jumps = int(cfg.get("max_air_jumps", 1))
         self.start_collectibles = start_state.get("collectibles_left", -1)
         self.start_score = start_state.get("score") or 0  # e.g. a spawn point that lands on a coin
@@ -51,6 +52,53 @@ class Oracle:
         self.air_jumps = 0
         self.prev = start_state.get("player") or {}
         self.score_frames: list = []     # frames of score increments (collect animations take ~60 frames)
+        # House rules (res://qa_rules.json): [{id, text, fn}], each fn(prev, cur, ctx) runs on every frame.
+        self.rules = list(rules or [])
+        self.rule_errors: dict = {}      # rule id -> exception text; a raising rule is off for this episode
+        if self.rules:
+            self.restart_rules(start_state)
+
+    def restart_rules(self, state: dict) -> None:
+        """Fresh per-run rule state (called at start and when the level restarts)."""
+        self.r_prev = {}
+        self.r_start = dict(state.get("player") or {})
+        self.r_score = state.get("score")
+        self.r_left = state.get("collectibles_left", -1)
+        self.r_start_score = state.get("score") or 0
+        self.r_start_left = state.get("collectibles_left", -1)
+        self.r_mem = {r["id"]: {} for r in self.rules}
+
+    def _judge_rules(self, res: dict) -> list:
+        new = []
+        evs: dict = {}
+        for ev in res.get("events", []):
+            evs.setdefault(ev.get("f"), []).append(ev)
+        b = res["state"].get("bounds") or {}
+        for f in res["frames"]:
+            fe = evs.get(f["f"], [])
+            for ev in fe:
+                if ev["type"] == "score":
+                    self.r_score = ev.get("to")
+                elif ev["type"] == "collectibles":
+                    self.r_left = ev.get("to", -1)
+            ctx = {"frame": f["f"], "score": self.r_score, "collectibles_left": self.r_left,
+                   "start_score": self.r_start_score, "start_collectibles": self.r_start_left,
+                   "taken": (self.r_start_left - self.r_left) if self.r_start_left >= 0 and self.r_left >= 0 else 0,
+                   "bounds": b, "start": self.r_start, "max_air_jumps": self.max_air_jumps, "events": fe}
+            prev, cur = dict(self.r_prev), dict(f)
+            for r in self.rules:
+                if r["id"] in self.rule_errors:
+                    continue
+                ctx["mem"] = self.r_mem.setdefault(r["id"], {})
+                try:
+                    v = r["fn"](prev, cur, ctx)
+                except Exception as e:  # noqa: BLE001 (a broken rule never crashes a hunt)
+                    self.rule_errors[r["id"]] = f"{type(e).__name__}: {e}"[:200]
+                    continue
+                if v:
+                    new += self._hit("rule:" + r["id"], f["f"], str(v)[:200])
+            self.r_prev = f
+        return new
 
     def _hit(self, cls, frame, detail):
         if cls not in self.found:
@@ -80,6 +128,8 @@ class Oracle:
         for ev in res.get("events", []):
             if ev["type"] == "score" and ev.get("from") is not None and vis.get(ev["f"]) is False:
                 new += self._hit("ghost_score", ev["f"], f"score {ev['from']} -> {ev['to']} while the player was hidden/dead")
+        if self.rules:
+            new += self._judge_rules(res)
         return new
 
     def judge_score(self, state: dict, frame: int) -> list:
@@ -101,7 +151,7 @@ class GodotHuntEnv:
     default_action = ("wait", {})
 
     def __init__(self, seed: int, tools: dict | None = None, record: bool = False, watch: bool = False,
-                 watch_label: str = "Hunter", **_kw):
+                 watch_label: str = "Hunter", house_rules: bool = False, **_kw):
         self.seed = seed
         self.watch, self.watch_label = watch, watch_label  # watch: visible real-time window with captions
         self.note = ""                   # the agent's reasoning for its next action (set by the harness)
@@ -121,7 +171,12 @@ class GodotHuntEnv:
         self.toolbox = sandbox.Toolbox(tools or {})
         self.state = self.game.call("reset", seed=seed)
         self.map = self.game.call("map", cell=32)
-        self.oracle = Oracle(self.cfg, self.state)
+        # House rules (res://qa_rules.json) apply to QA hunts (`qa hunt` passes house_rules=True), never to
+        # evolution / held-out eval, so those scores stay comparable across runs.
+        self.house_rules = house_rules_mod.load_enabled(self.game.project) if house_rules else []
+        if self.house_rules:
+            self.rules = self.rules_text(self.cfg, self.house_rules)
+        self.oracle = Oracle(self.cfg, self.state, self.house_rules)
         self.inputs: list = []           # full input history since the last reset (the repro)
         self.findings: list = []         # [{class, detail, seed, inputs}]
         self.plays = 0
@@ -132,7 +187,7 @@ class GodotHuntEnv:
 
     # ---------------------------------------------------------------- Env protocol
     @classmethod
-    def rules_text(cls, cfg: dict) -> str:
+    def rules_text(cls, cfg: dict, house: list | None = None) -> str:
         letters = ", ".join(f"{k}={v}" for k, v in (cfg.get("letters") or {}).items())
         return f"""You are a QA tester for a Godot game: {cfg.get('description', 'a 2D game')}.
 Your job is to FIND BUGS, not to win. You score 10 points for each distinct bug class you trigger:
@@ -144,7 +199,9 @@ Keys held during the token: {letters}. W means no keys. 60 frames = 1 second.
 """ + (f"""A jump starts when J goes from released to pressed; holding J longer jumps higher.
 Two consecutive tokens that both hold J do NOT re-press it; put a W1 between them.
 The game allows {cfg.get('max_air_jumps', 1)} mid-air jump(s) (double jump), more is a bug.
-""" if "J" in (cfg.get("letters") or {}) else "") + """reset() restarts the level from the spawn point (inputs restart too)."""
+""" if "J" in (cfg.get("letters") or {}) else "") + """reset() restarts the level from the spawn point (inputs restart too).""" + (
+            "\nHouse rules to try to break (the developer says these must always hold; breaking one is a bug worth 10 points,"
+            " reported as rule:<id>):\n" + "\n".join(f"- rule:{r['id']}: {r['text']}" for r in house) if house else "")
 
     def action_schemas(self, agent):
         return [
@@ -227,6 +284,8 @@ A tool that returns the same inputs every time makes the tester repeat itself: v
             self.oracle.start_collectibles = self.state.get("collectibles_left", -1)
             self.oracle.start_score = self.state.get("score") or 0
             self.oracle.score_frames = []
+            if self.oracle.rules:
+                self.oracle.restart_rules(self.state)
             self.inputs = []
             self.last = "level restarted"
             return self.last
@@ -268,7 +327,7 @@ A tool that returns the same inputs every time makes the tester repeat itself: v
 
     @property
     def over(self):
-        return self.plays >= self.max_decisions or len(self.oracle.found) == len(BUG_CLASSES)
+        return self.plays >= self.max_decisions or len(self.oracle.found) == len(BUG_CLASSES) + len(self.house_rules)
 
     def _settle(self):
         if self.done:
@@ -323,7 +382,8 @@ def verify(project: str, finding: dict) -> bool:
     g = GodotGame(os.path.join(ROOT, project))
     try:
         st = g.call("reset", seed=finding["seed"])
-        o = Oracle(g.info.get("config") or {}, st)
+        o = Oracle(g.info.get("config") or {}, st,
+                   house_rules_mod.load_enabled(g.project) if finding["class"].startswith("rule:") else None)
         for segs in finding["inputs"]:  # one bridge call per original play, exactly as recorded
             res = g.call("act", inputs=segs)
             o.judge(res, g.take_errors())

@@ -1,0 +1,48 @@
+{
+ "class": "rule:robot_jump_at_most",
+ "seed": 0,
+ "inputs": [
+  [
+   {
+    "hold": [],
+    "frames": 40
+   }
+  ],
+  [
+   {
+    "hold": [
+     "jump"
+    ],
+    "frames": 2
+   },
+   {
+    "hold": [],
+    "frames": 2
+   },
+   {
+    "hold": [
+     "jump"
+    ],
+    "frames": 2
+   },
+   {
+    "hold": [],
+    "frames": 2
+   },
+   {
+    "hold": [
+     "jump"
+    ],
+    "frames": 2
+   }
+  ]
+ ],
+ "act_index": 1,
+ "frame": 50,
+ "reproduced": true,
+ "bug_frame": 50,
+ "gif": "godot/games/platformer_heldout/qa_reports/evidence/rule-robot_jump_at_most_seed0.gif",
+ "png": "godot/games/platformer_heldout/qa_reports/evidence/rule-robot_jump_at_most_seed0.png",
+ "strip": "godot/games/platformer_heldout/qa_reports/evidence/rule-robot_jump_at_most_seed0_strip.png",
+ "strip_frames": 5
+}
