@@ -57,6 +57,7 @@ var compile_button := Button.new()
 var _rules: Array = []
 var _rule_open := {}
 var _compile_job = null
+var _compile_t0 := 0
 # How-it-works stepper + run status
 const STEPS := [
 	["Hunt", "Nemotron hunters play the game through the bridge and try to break it"],
@@ -462,6 +463,9 @@ func _read_pipe(job: Dictionary) -> void:
 		job["mutex"].unlock()
 
 func _process(_delta: float) -> void:
+	if _compile_job != null:  # a Super call can take a minute under load: show it is alive
+		var secs := (Time.get_ticks_msec() - _compile_t0) / 1000
+		compile_button.text = "%s Compiling with Nemotron... %ds" % [["|", "/", "-", "\\"][(Time.get_ticks_msec() / 150) % 4], secs]
 	for job in _jobs.duplicate():
 		job["mutex"].lock()
 		var lines: Array = job["lines"].duplicate()
@@ -1070,7 +1074,8 @@ func _compile_rules() -> void:
 		_rules_log("[color=red]Could not start %s.[/color]" % _esc(_python()))
 		return
 	compile_button.disabled = true
-	compile_button.text = "Compiling..."
+	_compile_t0 = Time.get_ticks_msec()
+	compile_button.text = "Compiling with Nemotron..."
 
 func _compile_done(code: int, _out: String) -> void:
 	_compile_job = null
