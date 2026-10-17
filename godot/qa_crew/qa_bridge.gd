@@ -383,6 +383,10 @@ func _act(inputs: Array, capture_every: int = 0, capture_dir: String = "") -> Di
 		var hold: Array = seg.get("hold", [])
 		var tap: Array = seg.get("tap", [])
 		var n := clampi(int(seg.get("frames", 1)), 1, 600)
+		# press_in_process: press keys outside the physics step, as real keyboard input arrives, so games that
+		# call Input.is_action_just_pressed() inside _input() see presses after the first segment too.
+		if _cfg.get("press_in_process", false) and Engine.is_in_physics_frame():
+			await get_tree().process_frame
 		for a in hold:
 			if InputMap.has_action(a):
 				_press(a, true)
