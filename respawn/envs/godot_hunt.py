@@ -8,6 +8,7 @@ stored as (seed, inputs) so `replay()` can reproduce it in a fresh game process.
 from __future__ import annotations
 
 import json
+import time
 import os
 import re
 
@@ -155,7 +156,14 @@ class GodotHuntEnv:
         self.seed = seed
         self.watch, self.watch_label = watch, watch_label  # watch: visible real-time window with captions
         self.note = ""                   # the agent's reasoning for its next action (set by the harness)
-        self.game = GodotGame(os.path.join(ROOT, self.project), watch=watch)
+        for attempt in range(3):  # a game that dies while starting (e.g. an editor re-importing it) gets another try
+            try:
+                self.game = GodotGame(os.path.join(ROOT, self.project), watch=watch)
+                break
+            except (OSError, TimeoutError, RuntimeError):
+                if attempt == 2:
+                    raise
+                time.sleep(2)
         self.cfg = self.game.info.get("config") or {}
         self.controls = {k: v for k, v in (self.cfg.get("letters") or {}).items()}
         if not self.controls:  # no qa_crew.json: guess from the game's InputMap
