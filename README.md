@@ -38,8 +38,22 @@ Bug classes the oracle confirms: `crash` (GDScript error), `clip` (through/insid
   and overlap checks against the physics space). The engine is **frozen between commands** and run with
   `--fixed-fps 60`, so a run is exactly reproducible from (seed, inputs). `map` samples a collision map,
   `screenshot`/`capture_every` save frames when the game runs on a virtual display (Xvfb).
-- `plugin.cfg`, `qa_plugin.gd`, `qa_dock.gd`: an editor dock. Paste a Crusoe API key, press
-  **Run QA crew**, and reports appear in `res://qa_reports/`.
+- `plugin.cfg`, `qa_plugin.gd`, `qa_dock.gd`: the **QA Crew** editor dock (enabled in
+  `platformer_heldout` and `dodge_heldout`, which ship three sample reports in `qa_reports/`). Three tabs:
+  - **Bugs**: every report in `res://qa_reports/` with a thumbnail, bug class and a "reproduces" mark.
+    Selecting one plays the failure animation (a sprite sheet of the GIF frames) and shows expected vs
+    actual, the minimal repro, the state at failure and where to look. **Open code** jumps to the suspect
+    script line, **Replay in game** runs the game in the editor and plays the exact repro at normal speed
+    (the bridge reads `res://qa_reports/.replay.json` once, no TCP client needed), and **Check fix** re-runs
+    the repro headless: green *Fixed* or red *Still reproduces*.
+  - **Crew**: how the crew learned, from a run's `lineage.jsonl`: score per night (filled dots = kept
+    changes on the champion line, hollow = rejected candidates), each night's change and verdict, and
+    version 0 vs latest on unseen games when `heldout_*.json` files exist.
+  - **Run**: Crusoe API key, crew folder, Python, genome and seeds, **Run QA crew** and a live log. When
+    the run finishes the dock switches to Bugs.
+
+![QA Crew dock, Bugs tab](docs/dock_bugs.png)
+![QA Crew dock, Crew tab](docs/dock_crew.png)
 - Optional `res://qa_crew.json` per game: player class, score location, collectibles, bounds, spawn
   points, key letters. Without it the crew guesses from the InputMap.
 
@@ -63,8 +77,13 @@ runs/                    evolution runs (lineage.jsonl, genomes, trajectories)
 
 ## Run it
 
-Requirements: Python 3.11+, Godot 4.3 (`GODOT_BIN`, default `/opt/godot/Godot_v4.3-stable_linux.x86_64`),
-`pip install pillow`, and `xvfb-run` for GIFs. Put `CRUSOE_API_KEY=...` in `.env` (never committed).
+Requirements: Python 3.11+, Godot 4.3+ (tested on 4.3 Linux and 4.7.2 macOS; `GODOT_BIN`, default
+`/opt/godot/Godot_v4.3-stable_linux.x86_64`), `pip install pillow`, and on a headless Linux box `xvfb-run`
+for GIFs. Put `CRUSOE_API_KEY=...` in `.env` (never committed).
+
+macOS: GIFs render in a real (briefly visible) game window, so no xvfb is needed. A Godot started from
+Finder only sees the system `python3` (no Pillow), so set **Python** in the dock's Run tab to a venv with
+Pillow, e.g. `<crew folder>/.venv/bin/python3` (picked up automatically when it exists).
 
 ```bash
 # import assets once per game

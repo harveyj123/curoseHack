@@ -24,6 +24,10 @@ var _cfg := {}
 var _frame := 0
 var _seed := 0
 var _pending_spawn = null
+var _hud: Label = null
+
+# Written by the editor dock's "Replay in game" button; played once at real-time speed, then deleted.
+const REPLAY_FILE := "res://qa_reports/.replay.json"
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -33,14 +37,45 @@ func _ready() -> void:
 			port = int(a.split("=")[1])
 	if port == 0:
 		set_process(false)
+		if FileAccess.file_exists(REPLAY_FILE) and DisplayServer.get_name() != "headless":
+			_load_cfg()
+			_replay.call_deferred()
 		return
+	_load_cfg()
+	var err := _server.listen(port, "127.0.0.1")
+	print("QA_BRIDGE listening on %d (err %d)" % [port, err])
+	get_tree().node_added.connect(_on_node_added)
+
+func _load_cfg() -> void:
 	if FileAccess.file_exists("res://qa_crew.json"):
 		_cfg = JSON.parse_string(FileAccess.get_file_as_string("res://qa_crew.json"))
 		if _cfg == null:
 			_cfg = {}
-	var err := _server.listen(port, "127.0.0.1")
-	print("QA_BRIDGE listening on %d (err %d)" % [port, err])
-	get_tree().node_added.connect(_on_node_added)
+
+# ------------------------------------------------------------------ replay (no TCP client, no freeze)
+func _replay() -> void:
+	var r = JSON.parse_string(FileAccess.get_file_as_string(REPLAY_FILE))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(REPLAY_FILE))
+	if typeof(r) != TYPE_DICTIONARY:
+		return
+	var layer := CanvasLayer.new()
+	layer.layer = 128
+	add_child(layer)
+	_hud = Label.new()
+	_hud.position = Vector2(8, 6)
+	_hud.add_theme_color_override("font_color", Color(1, 0.35, 0.3))
+	_hud.add_theme_color_override("font_outline_color", Color.BLACK)
+	_hud.add_theme_constant_override("outline_size", 4)
+	layer.add_child(_hud)
+	var plays: Array = r.get("plays", [])
+	var label := "QA replay %s (seed %d)" % [String(r.get("id", "")), int(r.get("seed", 0))]
+	_hud.text = label + "  starting..."
+	await get_tree().create_timer(1.0).timeout  # let the window come up so the whole repro is seen
+	await _reset(int(r.get("seed", 0)))
+	for i in plays.size():
+		_hud.text = "%s  play %d/%d" % [label, i + 1, plays.size()]
+		await _act(plays[i])
+	_hud.text = "%s  done at frame %d" % [label, _frame]
 
 func _process(_delta: float) -> void:
 	if _peer == null and _server.is_connection_available():

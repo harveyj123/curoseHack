@@ -1,0 +1,61 @@
+{
+  "id": "crash-8a2994bb",
+  "title": "Crash: Invalid call. Nonexistent function 'show_air_hint (via call)' in base 'Control (PauseMenu)",
+  "bug_class": "crash",
+  "game": "/home/user/curosehack/godot/games/platformer_heldout",
+  "expected": "No script errors during play.",
+  "actual": "Invalid call. Nonexistent function 'show_air_hint (via call)' in base 'Control (PauseMenu)'. at Game._unhandled_input (res://game.gd:22)",
+  "repro": {
+    "seed": 1,
+    "plays": [
+      [
+        {
+          "hold": [
+            "move_right"
+          ],
+          "frames": 20
+        },
+        {
+          "hold": [
+            "jump"
+          ],
+          "frames": 2
+        },
+        {
+          "hold": [
+            "toggle_pause"
+          ],
+          "frames": 2
+        }
+      ]
+    ]
+  },
+  "repro_tokens": [
+    "R20 J2 P2"
+  ],
+  "original_plays": 1,
+  "minimized_plays": 1,
+  "reproduced": true,
+  "frame": 24,
+  "state_at_failure": {
+    "x": 332.02,
+    "y": 624.38,
+    "vx": 225,
+    "vy": -396.5,
+    "floor": false,
+    "wall": false,
+    "visible": true,
+    "score": 1
+  },
+  "suspects": [
+    "Game._unhandled_input (res://game.gd:22)",
+    "res://player/player.gd: player logic"
+  ],
+  "evidence": {
+    "gif": "evidence/crash_seed1.gif",
+    "png": "evidence/crash_seed1.png",
+    "strip": "evidence/crash_seed1_strip.png",
+    "strip_frames": 12
+  },
+  "check": "python -m respawn.qa check godot/games/platformer_heldout/qa_reports/crash-8a2994bb.json"
+}

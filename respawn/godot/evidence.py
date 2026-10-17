@@ -12,6 +12,21 @@ from PIL import Image, ImageDraw
 from respawn.godot.client import GodotGame
 
 
+def strip(ims: list, path: str, width: int = 320, max_frames: int = 40) -> int:
+    """Same frames as the GIF, side by side in one PNG: the Godot editor dock cannot play GIFs, so it
+    animates this sprite sheet instead. Kept under 16384 px wide (the max texture size)."""
+    step = max(1, -(-len(ims) // max_frames))
+    picked = ims[::step]
+    if ims[-1] is not picked[-1]:
+        picked.append(ims[-1])
+    h = round(ims[0].height * width / ims[0].width)
+    sheet = Image.new("RGB", (width * len(picked), h))
+    for i, im in enumerate(picked):
+        sheet.paste(im.resize((width, h)), (i * width, 0))
+    sheet.save(path)
+    return len(picked)
+
+
 def capture(project_dir: str, finding: dict, out_dir: str, every: int = 2, window: int = 60) -> dict:
     """Replays finding['inputs'] act by act; captures frames of the act that triggered the bug."""
     from respawn.envs.godot_hunt import Oracle
@@ -48,13 +63,14 @@ def capture(project_dir: str, finding: dict, out_dir: str, every: int = 2, windo
         d.text((6, 3), tag, fill=(255, 80, 80) if abs(f - bug_frame) <= every else (255, 255, 255))
         frames.append((f, im))
     base = os.path.join(out_dir, f"{finding['class']}_seed{finding['seed']}")
-    out = {"reproduced": reproduced, "bug_frame": bug_frame, "gif": None, "png": None}
+    out = {"reproduced": reproduced, "bug_frame": bug_frame, "gif": None, "png": None, "strip": None, "strip_frames": 0}
     if frames:
         ims = [im for _, im in frames]
         ims[0].save(base + ".gif", save_all=True, append_images=ims[1:], duration=50, loop=0)
         key = min(frames, key=lambda t: abs(t[0] - bug_frame))[1]
         key.save(base + ".png")
-        out.update({"gif": base + ".gif", "png": base + ".png"})
+        n = strip(ims, base + "_strip.png")
+        out.update({"gif": base + ".gif", "png": base + ".png", "strip": base + "_strip.png", "strip_frames": n})
     json.dump({**finding, **out}, open(base + ".json", "w"), indent=1)
     shutil.rmtree(tmp, ignore_errors=True)
     return out

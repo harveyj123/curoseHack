@@ -6,6 +6,7 @@ import os
 import re
 import socket
 import subprocess
+import sys
 import threading
 import time
 
@@ -38,7 +39,9 @@ class GodotGame:
         if headless:
             args.insert(1, "--headless")
         else:  # rendered (for screenshots / GIF evidence) on a virtual display
-            args = ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"] + args + ["--rendering-driver", "opengl3"]
+            args += ["--rendering-driver", "opengl3"]
+            if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
+                args = ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"] + args
         args += ["--", f"--qa-port={self.port}"]
         env = dict(os.environ)
         self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, bufsize=1)

@@ -1,0 +1,48 @@
+{
+ "class": "infinite_jump",
+ "seed": 0,
+ "inputs": [
+  [
+   {
+    "hold": [],
+    "frames": 40
+   }
+  ],
+  [
+   {
+    "hold": [
+     "jump"
+    ],
+    "frames": 6
+   },
+   {
+    "hold": [],
+    "frames": 4
+   },
+   {
+    "hold": [
+     "jump"
+    ],
+    "frames": 6
+   },
+   {
+    "hold": [],
+    "frames": 4
+   },
+   {
+    "hold": [
+     "jump"
+    ],
+    "frames": 2
+   }
+  ]
+ ],
+ "act_index": 1,
+ "frame": 62,
+ "reproduced": true,
+ "bug_frame": 62,
+ "gif": "godot/games/platformer_heldout/qa_reports/evidence/infinite_jump_seed0.gif",
+ "png": "godot/games/platformer_heldout/qa_reports/evidence/infinite_jump_seed0.png",
+ "strip": "godot/games/platformer_heldout/qa_reports/evidence/infinite_jump_seed0_strip.png",
+ "strip_frames": 11
+}

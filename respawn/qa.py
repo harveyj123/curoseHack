@@ -29,7 +29,7 @@ REPORT_SCHEMA = {
     "frame": "physics frame of the failure within the repro",
     "state_at_failure": "player position, velocity, floor/wall flags, score",
     "suspects": "files/lines to look at first",
-    "evidence": {"gif": "path", "png": "path"},
+    "evidence": {"gif": "path", "png": "path", "strip": "sprite sheet of the GIF frames (for the editor dock)", "strip_frames": "int"},
     "check": "command that exits 0 once the bug is fixed",
 }
 
@@ -151,7 +151,7 @@ def build_report(project: str, finding: dict, out_dir: str, evidence: bool = Tru
         "id": f"{finding['class']}-{rid}",
         "title": f"{finding['class'].replace('_', ' ').capitalize()}: {hit.get('detail', '')[:90]}",
         "bug_class": finding["class"],
-        "game": os.path.relpath(project),
+        "game": os.path.abspath(project),
         "expected": EXPECTED.get(finding["class"], ""),
         "actual": hit.get("detail", ""),
         "repro": {"seed": finding["seed"], "plays": plays},
@@ -170,7 +170,8 @@ def build_report(project: str, finding: dict, out_dir: str, evidence: bool = Tru
         from respawn.godot.evidence import capture
         ev = capture(project, {"class": finding["class"], "seed": finding["seed"], "inputs": plays,
                                "act_index": len(plays) - 1, "frame": hit.get("frame")}, os.path.join(out_dir, "evidence"))
-        report["evidence"] = {"gif": ev.get("gif") and os.path.relpath(ev["gif"], out_dir), "png": ev.get("png") and os.path.relpath(ev["png"], out_dir)}
+        rel = {k: ev.get(k) and os.path.relpath(ev[k], out_dir) for k in ("gif", "png", "strip")}
+        report["evidence"] = rel | {"strip_frames": ev.get("strip_frames", 0)}
     path = os.path.join(out_dir, report["id"] + ".json")
     json.dump(report, open(path, "w"), indent=2)
     open(os.path.join(out_dir, report["id"] + ".md"), "w").write(markdown(report))
@@ -201,7 +202,13 @@ def markdown(r: dict) -> str:
 
 def check(path: str) -> int:
     r = json.load(open(path))
-    rep = Reproducer(os.path.abspath(r["game"]))
+    game = r["game"]
+    if not os.path.exists(os.path.join(game, "project.godot")):
+        # "game" is relative to where the hunt ran; a report kept in <project>/qa_reports finds its game from there
+        here = os.path.dirname(os.path.dirname(os.path.abspath(path)))
+        if os.path.exists(os.path.join(here, "project.godot")):
+            game = here
+    rep = Reproducer(os.path.abspath(game))
     try:
         o, _, _ = rep.run(r["repro"]["seed"], r["repro"]["plays"])
     finally:
@@ -216,6 +223,7 @@ def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, player
     from respawn.genome import Genome
     from respawn.harness import run_many
     from respawn.llm import LLM
+    project = os.path.abspath(project)
     name = {"platformer_train": "godot_hunt", "platformer_heldout": "godot_hunt_heldout", "dodge_heldout": "godot_hunt_dodge"}.get(
         os.path.basename(os.path.normpath(project)))
     if name is None:  # any other Godot project with the bridge installed
@@ -223,6 +231,7 @@ def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, player
         name = "godot_hunt_" + os.path.basename(os.path.normpath(project))
         _make(os.path.abspath(project), name)
     envmod.get(name)
+    os.makedirs(out_dir, exist_ok=True)
     g = Genome.load(genome_dir) if genome_dir else Genome()
     eps = run_many(LLM(), name, seeds, g, players, parallel=min(4, len(seeds)))
     seen, reports = set(), []
