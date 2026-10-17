@@ -159,7 +159,37 @@ python -m respawn.qa check qa_reports/<id>.json
 
 ## Results
 
-See `runs/hunt1/lineage.jsonl` and `runs/hunt1/heldout_*.md` (filled in during the event).
+Run 1 (`demo/lineage.jsonl`, 6 nights, 8 paired training sessions per night, score = 10 per verified bug):
+
+- Night 0 (untrained crew): 0.0 per session on training bug set A.
+- Night 1 **kept**: the coach wrote `tools/bug_hunter.py` (shown in the dock's Crew tab); training score 0.0 -> 2.5, P(better) 0.90.
+- Nights 2-6 **rejected** by the gatekeeper (no gain on the paired sessions).
+
+Held-out (games and bug sets never used in training), version 0 vs the trained crew, 8 sessions each:
+
+**Platformer, bug set B**
+
+| genome | change | held-out mean | per-seed |
+|---|---|---|---|
+| gen_000 | starting team | 2.5 | 0, 10, 0, 0, 0, 0, 10, 0 |
+| gen_001 | Add a tool that, given the current observation, suggests a focused inp | 1.25 | 0, 0, 0, 10, 0, 0, 0, 0 |
+
+gen_001 vs gen_000 on 8 unseen seeds: mean gain -1.25, 1W/2L/5T, 90% CI [-5.0, 2.5], bootstrap P(better) 0.193
+
+**Dodge the Creeps, bug set C**
+
+| genome | change | held-out mean | per-seed |
+|---|---|---|---|
+| gen_000 | starting team | 1.25 | 0, 0, 0, 0, 10, 0, 0, 0 |
+| gen_001 | Add a tool that, given the current observation, suggests a focused inp | 0.0 | 0, 0, 0, 0, 0, 0, 0, 0 |
+
+gen_001 vs gen_000 on 8 unseen seeds: mean gain -1.25, 0W/1L/7T, 90% CI [-3.75, 0.0], bootstrap P(better) 0.0
+
+**What this shows, honestly:** the loop runs end to end on Nemotron (coach writes and tests a tool, the
+gatekeeper accepts or rejects, every step is logged), but run 1's only kept change did **not** transfer.
+The hunters started calling the new tool every turn and repeating its single suggestion, which happened
+to work on 2 of the 8 training sessions. The held-out evaluation is what caught this overfitting. Run 2
+uses 12 paired sessions per night to make a lucky acceptance less likely (results below if it finishes in time).
 
 ## What we built today vs. what we used
 

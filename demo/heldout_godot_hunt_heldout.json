@@ -1,0 +1,537 @@
+{
+  "env": "godot_hunt_heldout",
+  "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107
+  ],
+  "genomes": {
+    "gen_000": {
+      "fingerprint": "a6ebc8c0ee",
+      "change": "starting team",
+      "scores": {
+        "100": 0,
+        "101": 10,
+        "102": 0,
+        "103": 0,
+        "104": 0,
+        "105": 0,
+        "106": 10,
+        "107": 0
+      },
+      "mean": 2.5,
+      "outcomes": {
+        "100": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "101": {
+          "score": 10,
+          "bugs": [
+            "clip"
+          ],
+          "details": {
+            "clip": "through geometry at (789,657)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "clip",
+              "detail": "through geometry at (789,657)",
+              "seed": 101,
+              "frame": 39,
+              "act_index": 1,
+              "inputs": [
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 30
+                  },
+                  {
+                    "hold": [
+                      "move_right",
+                      "jump"
+                    ],
+                    "frames": 20
+                  },
+                  {
+                    "hold": [],
+                    "frames": 5
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "102": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "103": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "104": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "105": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "106": {
+          "score": 10,
+          "bugs": [
+            "clip"
+          ],
+          "details": {
+            "clip": "through geometry at (169,337)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "clip",
+              "detail": "through geometry at (169,337)",
+              "seed": 106,
+              "frame": 81,
+              "act_index": 11,
+              "inputs": [
+                [
+                  {
+                    "hold": [],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "move_right"
+                    ],
+                    "frames": 10
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "107": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        }
+      }
+    },
+    "gen_001": {
+      "fingerprint": "a5974c4abd",
+      "change": "Add a tool that, given the current observation, suggests a focused input sequence to test for infinite_jump (double jump when only one is allowed) and clip (moving into solid geometry), thereby increasing the chance of discovering bugs.",
+      "scores": {
+        "100": 0,
+        "101": 0,
+        "102": 0,
+        "103": 10,
+        "104": 0,
+        "105": 0,
+        "106": 0,
+        "107": 0
+      },
+      "mean": 1.25,
+      "outcomes": {
+        "100": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "101": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "102": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "103": {
+          "score": 10,
+          "bugs": [
+            "infinite_jump"
+          ],
+          "details": {
+            "infinite_jump": "air jump #2 at (600,220)"
+          },
+          "plays": 14,
+          "findings": [
+            {
+              "class": "infinite_jump",
+              "detail": "air jump #2 at (600,220)",
+              "seed": 103,
+              "frame": 29,
+              "act_index": 9,
+              "inputs": [
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ],
+                [
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [],
+                    "frames": 1
+                  },
+                  {
+                    "hold": [
+                      "jump"
+                    ],
+                    "frames": 1
+                  }
+                ]
+              ],
+              "project": "platformer_heldout"
+            }
+          ]
+        },
+        "104": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "105": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "106": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        },
+        "107": {
+          "score": 0,
+          "bugs": [],
+          "details": {},
+          "plays": 14,
+          "findings": []
+        }
+      }
+    }
+  },
+  "comparison": {
+    "from": "gen_000",
+    "to": "gen_001",
+    "n": 8,
+    "mean_delta": -1.25,
+    "wins": 1,
+    "losses": 2,
+    "ties": 5,
+    "p_better": 0.193,
+    "ci90": [
+      -5.0,
+      2.5
+    ],
+    "deltas": [
+      0,
+      -10,
+      0,
+      10,
+      0,
+      0,
+      -10,
+      0
+    ]
+  }
+}
