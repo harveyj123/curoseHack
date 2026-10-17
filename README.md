@@ -167,7 +167,10 @@ Run 2 is the shipped demo crew (`demo/lineage.jsonl`, `demo/genomes/`; copied fr
 sessions per night): on night 1 the coach wrote `tools/bug_explorer.py` (picks input sequences aimed at the bug
 classes not found yet) and the gatekeeper kept it, training score 2.5 -> 14.2 points per session (11 wins, 0
 losses, 1 tie on the paired sessions, P(better) 1.00). Two earlier night-1/2 attempts failed their own tool tests
-before a restart. Held-out results for run 2 go in `demo/heldout_*.json` when its evaluation finishes.
+before a restart. Held-out, on Dodge the Creeps (bug set C, never trained on, 8 sessions): the trained crew
+finds 0.875 verified bugs per session vs 0.375 for the starting crew (4 better, 0 worse, 4 tied; 90% CI of the
+gain [+2.5, +7.5] points, P(better) 0.997; `demo/heldout_godot_hunt_dodge.md`). The platformer held-out eval
+(bug set B) lands in `demo/heldout_godot_hunt_heldout.json` when it finishes.
 
 Run 1 (kept for honesty in `demo/run1/`: lineage, genomes and held-out files; 6 nights, 8 paired training sessions per night, score = 10 per verified bug):
 
