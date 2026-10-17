@@ -30,7 +30,7 @@ var _crew_values: Array = []  # crew_pick item -> genome_edit value ("" newest t
 var activity := Label.new()
 var watch_check := CheckBox.new()
 var run_button := Button.new()
-var learned_link := LinkButton.new()
+var learned_link := Button.new()  # a flat Button, not a LinkButton: LinkButton text cannot wrap
 var output := RichTextLabel.new()
 # Bugs tab
 var bug_count := Label.new()
@@ -125,7 +125,9 @@ func _ready() -> void:
 	var s := EditorInterface.get_editor_scale()
 	custom_minimum_size = Vector2(380, 0) * s
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(_build_steps())
+	var steps := _build_steps()
+	steps.visible = false  # the 1 Hunt … 5 Unseen strip is hidden; _set_step still updates it
+	add_child(steps)
 	add_child(tabs)
 	tabs.add_child(_build_bugs())
 	tabs.add_child(_build_rules())
@@ -134,6 +136,9 @@ func _ready() -> void:
 	_anim_timer.wait_time = 0.08
 	_anim_timer.timeout.connect(_anim_tick)
 	add_child(_anim_timer)
+	# A long label or button must wrap, never widen the dock past the screen (e.g. editor scale 200% on a Retina Mac).
+	_fit_tree(self)
+	get_tree().node_added.connect(func(n): if is_ancestor_of(n): _fit(n))
 	_refresh_bugs()
 	_load_rules()
 	_load_suggestions()
@@ -150,6 +155,12 @@ func _ready() -> void:
 			if want == "Tools":  # the bottom of the Crew tab: night 1's coach-written tool
 				await get_tree().create_timer(0.5).timeout
 				crew_scroll.scroll_vertical = 100000
+		if want == "Train":  # docs screenshots / smoke test: open the training section and start it
+			tabs.current_tab = _tab_index("Crew")
+			train_button.get_parent().get_parent().visible = true
+			if key_edit.text == "":
+				key_edit.text = OS.get_environment("CRUSOE_API_KEY")
+			_on_train()
 		if want == "RunLive":  # docs screenshots: start a hunt (key from CRUSOE_API_KEY when none is saved)
 			tabs.current_tab = _tab_index("Run")
 			if key_edit.text == "":
@@ -274,6 +285,18 @@ func _scroll_crew_to(c: Control) -> void:
 		tw.tween_property(c, "modulate", Color.WHITE, 1.2)
 
 # ------------------------------------------------------------------ layout
+func _fit_tree(n: Node) -> void:
+	_fit(n)
+	for c in n.get_children():
+		_fit_tree(c)
+
+func _fit(n: Node) -> void:
+	if n is OptionButton:
+		n.clip_text = true
+		n.fit_to_longest_item = false
+	elif (n is Label or n is Button) and n.get_parent() is VBoxContainer and n.autowrap_mode == TextServer.AUTOWRAP_OFF:
+		n.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
 func _section(text: String) -> Label:
 	var l := Label.new()
 	l.text = text
@@ -298,11 +321,9 @@ func _build_bugs() -> Control:
 	var bar := HBoxContainer.new()
 	bug_count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bug_count.clip_text = true
-	bar.add_child(bug_count)
 	var refresh := Button.new()
 	refresh.text = "Refresh"
 	refresh.pressed.connect(_refresh_bugs)
-	bar.add_child(refresh)
 	var clear := Button.new()
 	clear.text = "Clear list"
 	clear.tooltip_text = "Move every report into qa_reports/archive/ so the next run starts from an empty list (nothing is deleted)"
@@ -313,7 +334,10 @@ func _build_bugs() -> Control:
 	confirm.confirmed.connect(_clear_bugs)
 	root.add_child(confirm)
 	clear.pressed.connect(func(): confirm.popup_centered())
+	# Buttons first, so a narrow dock clips the count text, never the buttons.
 	bar.add_child(clear)
+	bar.add_child(refresh)
+	bar.add_child(bug_count)
 	root.add_child(bar)
 	var bar2 := HBoxContainer.new()
 	class_filter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -390,6 +414,140 @@ func _build_bugs() -> Control:
 	detail.visible = false
 	return root
 
+# Train the crew from the editor: respawn evolve on this project, in the background like a hunt. Collapsed by default.
+var train_rounds := SpinBox.new()
+var train_patience := SpinBox.new()
+var train_runs := SpinBox.new()
+var train_button := Button.new()
+var train_stop := Button.new()
+var train_status := Label.new()
+var _train_job = null
+var _train_round := 0
+
+func _build_train(root: Control) -> void:
+	var toggle := Button.new()
+	toggle.text = "▾ Train the crew"
+	toggle.flat = true
+	toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	toggle.tooltip_text = "Run training rounds on this game: the coach proposes one change per round and a tryout decides if it is kept"
+	var box := VBoxContainer.new()
+	toggle.pressed.connect(func():
+		box.visible = not box.visible
+		toggle.text = ("▾ " if box.visible else "▸ ") + "Train the crew")
+	root.add_child(toggle)
+	root.add_child(box)
+	var hint := Label.new()
+	hint.text = "Each training round, the coach suggests one change to the crew, then a tryout plays the new crew against the current one on the same test runs. The change is kept only if it finds more bugs. Training continues from where it last stopped on this game."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_color_override("font_color", _col("font_disabled_color"))
+	hint.add_theme_font_size_override("font_size", int(12 * EditorInterface.get_editor_scale()))
+	box.add_child(hint)
+	for row in [["Training rounds", train_rounds, 1, 20, 3], ["Stop early after this many rounds with no gain (0 = never)", train_patience, 0, 10, 3],
+			["Test runs per tryout", train_runs, 2, 16, 8]]:
+		var sp: SpinBox = row[1]
+		sp.min_value = row[2]
+		sp.max_value = row[3]
+		sp.value = row[4]
+		_add_row(box, row[0], sp)
+	var bar := HBoxContainer.new()
+	train_button.text = "Start training"
+	var confirm := ConfirmationDialog.new()
+	confirm.title = "Start training?"
+	confirm.ok_button_text = "Start training"
+	confirm.confirmed.connect(_on_train)
+	box.add_child(confirm)
+	train_button.pressed.connect(func():
+		var games := int(train_runs.value) * (2 * int(train_rounds.value) + 1)
+		confirm.dialog_text = "This uses your Crusoe API key: up to %d training round(s), about %d game sessions in all,\neach making AI calls. It runs in the background; you can press Stop at any time." % [int(train_rounds.value), games]
+		confirm.popup_centered())
+	bar.add_child(train_button)
+	train_stop.text = "Stop"
+	train_stop.disabled = true
+	train_stop.pressed.connect(func():
+		if _train_job != null:
+			OS.kill(_train_job["pid"])
+			_train_status_say("Stopping…"))
+	bar.add_child(train_stop)
+	box.add_child(bar)
+	train_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	train_status.add_theme_color_override("font_color", Color("#5ec8e5"))
+	box.add_child(train_status)
+
+func _train_status_say(t: String) -> void:
+	train_status.text = t
+
+func _train_dir() -> String:
+	# One training history per game, so later rounds (after the next build) continue it and the stop rule sees it all.
+	return "runs/godot_" + ProjectSettings.globalize_path("res://").trim_suffix("/").get_file()
+
+func _on_train() -> void:
+	if key_edit.text.strip_edges() == "" or repo_edit.text.strip_edges() == "":
+		_train_status_say("Set the Crusoe API key and the crew folder in the Run tab first.")
+		return
+	var n := int(train_runs.value)
+	var args := PackedStringArray(["CRUSOE_API_KEY=" + key_edit.text, _python(), "-m", "respawn"])
+	if OS.get_environment("QA_TRAIN_MOCK") == "1":  # offline smoke test: scripted crew and coach
+		args.append("--mock")
+	args.append_array(["evolve", "--project", ProjectSettings.globalize_path("res://"), "--run", repo_edit.text.path_join(_train_dir()),
+		"--gens", str(int(train_rounds.value)), "--train", "0-%d" % (n - 1), "--patience", str(int(train_patience.value))])
+	var g := genome_edit.text.strip_edges()
+	if g == "":
+		g = _newest_demo_genome()
+	if g != "" and g != "none":
+		args.append_array(["--start", g if g.is_absolute_path() else repo_edit.text.path_join(g)])
+	_train_job = _spawn(args, _train_line, _train_done)
+	if _train_job == null:
+		_train_status_say("Could not start %s." % _python())
+		return
+	_train_round = 0
+	train_button.disabled = true
+	train_stop.disabled = false
+	_train_status_say("Starting training…")
+
+func _train_line(line: String) -> void:
+	# evolve's log lines ("HH:MM:SS night 2: ACCEPTED ...") in plain words
+	var m := line.substr(9) if line.length() > 9 and line.substr(2, 1) == ":" else ""
+	if m == "":
+		return
+	if m.begins_with("gen 0: evaluating"):
+		_train_status_say("Measuring the current crew on %d test runs…" % int(train_runs.value))
+	elif m.begins_with("gen 0 mean"):
+		_train_status_say("The current crew finds %.2f bugs per test run. Round 1 starts now." % (float(m.get_slice(" ", 3)) / 10.0))
+	elif m.begins_with("resuming"):
+		_train_status_say("Continuing this game's earlier training…")
+	elif m.begins_with("night "):
+		var r := m.get_slice(" ", 1).trim_suffix(":")
+		var rest := m.substr(m.find(": ") + 2)
+		if rest.begins_with("coach dreaming"):
+			_train_status_say("Round %s: the coach is reading how the testers played and writing a new idea…" % r)
+		elif rest.begins_with("testing candidate"):
+			_train_status_say("Round %s: tryout, new crew vs current crew on %d test runs.\nIdea: %s" % [r, int(train_runs.value), rest.substr(rest.find(": ") + 2)])
+		elif rest.begins_with("ACCEPTED"):
+			_train_status_say("Round %s: tryout: kept. The new crew finds %.2f bugs per test run." % [r, float(rest.get_slice("new mean ", 1)) / 10.0])
+		elif rest.begins_with("rejected"):
+			_train_status_say("Round %s: tryout: not kept, no gain. The current crew stays." % r)
+		elif rest.begins_with("proposal rejected"):
+			_train_status_say("Round %s: the coach's idea failed its own check; nothing changed." % r)
+	elif m.begins_with("stopping: no gain in "):
+		_train_status_say("Stopped early: no gain in %s rounds in a row, so the crew has learned what it can from this build. Train again after your next build." % m.get_slice(" ", 4))
+
+func _train_done(code: int, _all: String) -> void:
+	_train_job = null
+	train_button.disabled = false
+	train_stop.disabled = true
+	var dir := repo_edit.text.path_join(_train_dir())
+	var st = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("state.json"))) if FileAccess.file_exists(dir.path_join("state.json")) else null
+	if typeof(st) == TYPE_DICTIONARY and st.has("champion_dir"):
+		genome_edit.text = str(st["champion_dir"])  # the Run tab now hunts with the newest trained crew
+		_fill_crew_pick()
+	run_edit.text = _train_dir()
+	_load_crew()
+	var stopped := train_status.text.begins_with("Stopped early")
+	if code != 0 and not stopped:
+		_train_status_say("Training stopped (exit code %d). Rounds finished so far are saved and shown above." % code)
+	elif not stopped:
+		_train_status_say("Training finished. The card above shows the new crew version.")
+
 func _build_crew() -> Control:
 	var s := EditorInterface.get_editor_scale()
 	var scroll := ScrollContainer.new()
@@ -408,6 +566,7 @@ func _build_crew() -> Control:
 	score_card.add_theme_stylebox_override("panel", sb)
 	score_card.add_child(card_box)
 	root.add_child(score_card)
+	_build_train(root)
 	var bar := HBoxContainer.new()
 	var l := Label.new()
 	l.text = "Run folder"
@@ -514,7 +673,9 @@ func _build_run() -> Control:
 	run_button.add_theme_color_override("font_hover_color", Color.WHITE)
 	root.add_child(run_button)
 	# Every hunt runs with the crew the nightly loop trained; make that visible next to the Run button.
-	learned_link.underline = LinkButton.UNDERLINE_MODE_ON_HOVER
+	learned_link.flat = true
+	learned_link.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	learned_link.add_theme_color_override("font_color", _col("accent_color"))
 	learned_link.tooltip_text = "Open the Crew tab: how this crew learned, training round by round"
 	learned_link.pressed.connect(func(): tabs.current_tab = _tab_index("Crew"))
 	root.add_child(learned_link)
@@ -619,6 +780,14 @@ func _process(_delta: float) -> void:
 				code = code >> 8
 			job["on_exit"].call(code, job["out"])
 
+func _notification(what: int) -> void:
+	# Controls made with .new() that were never added to the tree (e.g. seeds_edit, genome_edit) would leak at exit.
+	if what == NOTIFICATION_PREDELETE:
+		for prop in get_property_list():
+			var v = get(prop["name"])
+			if v is Node and is_instance_valid(v) and v.get_parent() == null and v != self:
+				v.free()
+
 func _exit_tree() -> void:
 	for job in _jobs:
 		OS.kill(job["pid"])
@@ -678,7 +847,8 @@ func _fill_crew_pick() -> void:
 			_crew_values.append("demo/genomes/" + d)
 	var cur := genome_edit.text.strip_edges()
 	if not _crew_values.has(cur):
-		crew_pick.add_item("Custom: %s" % cur)
+		var ver := cur.get_file().trim_prefix("gen_").lstrip("0")
+		crew_pick.add_item(("Trained on this game: version %s" % (ver if ver != "" else "0")) if cur.contains("/runs/") or cur.begins_with("runs/") else "Custom: %s" % cur)
 		_crew_values.append(cur)
 	crew_pick.select(_crew_values.find(cur))
 	_update_genome_preview()

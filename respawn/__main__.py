@@ -30,6 +30,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     e = sub.add_parser("evolve")
     e.add_argument("--env", default="dungeon")
+    e.add_argument("--project", help="train on this Godot project folder (sets --env; used by the editor dock)")
     e.add_argument("--run", required=True)
     e.add_argument("--gens", type=int, default=5)
     e.add_argument("--train", default="0-7")
@@ -58,6 +59,9 @@ def main(argv=None):
     if a.cmd == "evolve":
         from respawn.evolve import evolve
         from respawn.genome import Genome
+        if a.project:
+            from respawn.qa import env_for_project
+            a.env = env_for_project(a.project)
         evolve(llm, a.env, a.run, a.gens, seeds(a.train), players, a.coach, a.parallel,
                Genome.load(a.start) if a.start else None, a.min_delta, a.min_p, a.thinking, not a.no_rerun, a.patience)
     elif a.cmd == "eval":

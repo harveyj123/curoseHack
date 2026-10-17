@@ -391,12 +391,8 @@ def check(path: str) -> int:
     return 1 if still else 0
 
 
-def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, players: list, evidence=True,
-         watch=False, mock=False) -> list:
-    from respawn import env as envmod
-    from respawn.genome import Genome
-    from respawn.harness import run_episode
-    from respawn.llm import LIGHTNING, LLM, NANO, SUPER
+def env_for_project(project: str) -> str:
+    """The registered env name for a Godot project folder (registering one for any other bridged project)."""
     project = os.path.abspath(project)
     name = {"platformer_train": "godot_hunt", "platformer_heldout": "godot_hunt_heldout", "dodge_heldout": "godot_hunt_dodge",
             "pixel_adventure": "godot_hunt_pixel", "pixel_clean": "godot_hunt_pixel_clean",
@@ -405,7 +401,18 @@ def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, player
     if name is None:  # any other Godot project with the bridge installed
         from respawn.envs.godot_hunt import _make
         name = "godot_hunt_" + os.path.basename(os.path.normpath(project))
-        _make(os.path.abspath(project), name)
+        _make(project, name)
+    return name
+
+
+def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, players: list, evidence=True,
+         watch=False, mock=False) -> list:
+    from respawn import env as envmod
+    from respawn.genome import Genome
+    from respawn.harness import run_episode
+    from respawn.llm import LIGHTNING, LLM, NANO, SUPER
+    project = os.path.abspath(project)
+    name = env_for_project(project)
     envmod.get(name)
     os.makedirs(out_dir, exist_ok=True)
     g = Genome.load(genome_dir) if genome_dir else Genome()
