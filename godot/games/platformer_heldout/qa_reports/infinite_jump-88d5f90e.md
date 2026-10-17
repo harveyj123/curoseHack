@@ -1,8 +1,18 @@
-# Infinite jump: air jump #2 at (90,545)
-
-**Class:** `infinite_jump`  **Game:** `/home/user/curosehack/godot/games/platformer_heldout`  **Reproduces:** yes
+# You can keep jumping in mid-air: 3 jumps before landing, but only 1 extra is allowed.
 
 ![failure](evidence/infinite_jump_seed0.gif)
+
+**What happened:** The player jumped 2 times in the air without touching the ground.
+
+**How to see it:** Start the level from spawn point 1, then wait 0.3 s, then tap Jump 3 times. Or press Replay in game.
+
+**Why it matters:** Players can fly over obstacles and skip parts of the level.
+
+## Details for AI agents
+
+### Infinite jump: air jump #2 at (90,545)
+
+**Class:** `infinite_jump`  **Game:** `/home/user/curosehack/godot/games/platformer_heldout`  **Reproduces:** yes
 
 **Expected:** At most the allowed number of mid-air jumps (double jump = 1) before touching the floor again.
 

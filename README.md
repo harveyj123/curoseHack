@@ -67,7 +67,9 @@ back into the next prompt, so each round proposes kinds of rules the developer h
   jumps to each stage's output when clicked. Four tabs:
   - **Bugs**: every report in `res://qa_reports/` with a thumbnail, a severity badge (crash high; clip,
     out of bounds and house rules medium; others low), bug class and a "reproduces" mark, filterable by class
-    and sorted by severity or newest.
+    and sorted by severity or newest. Each bug reads in plain English ("You can keep jumping in mid-air: 3 jumps before landing, but
+    only 1 extra is allowed": what happened, how to see it, why it matters; written from templates, no LLM);
+    the technical report sits under **Details for AI agents** with a *Copy report for an AI agent* button.
     Selecting one plays the failure animation (a sprite sheet of the GIF frames) and shows expected vs
     actual, the minimal repro, the state at failure and where to look. **Open code** jumps to the suspect
     script line, **Replay in game** runs the game in the editor and plays the exact repro at normal speed

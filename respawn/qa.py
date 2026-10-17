@@ -199,19 +199,156 @@ def build_report(project: str, finding: dict, out_dir: str, evidence: bool = Tru
                                "act_index": len(plays) - 1, "frame": hit.get("frame")}, os.path.join(out_dir, "evidence"))
         rel = {k: ev.get(k) and os.path.relpath(ev[k], out_dir) for k in ("gif", "png", "strip")}
         report["evidence"] = rel | {"strip_frames": ev.get("strip_frames", 0)}
+    report["plain"] = plain(report, project)
     path = os.path.join(out_dir, report["id"] + ".json")
     json.dump(report, open(path, "w"), indent=2)
     open(os.path.join(out_dir, report["id"] + ".md"), "w").write(markdown(report))
     return report
 
 
+# ------------------------------------------------------------------ plain English (no LLM: fast, deterministic)
+WHY = {
+    "crash": "The game's code stops working mid-play, so players can lose their progress or get stuck.",
+    "clip": "Players can get stuck inside the level or fall through it.",
+    "infinite_jump": "Players can fly over obstacles and skip parts of the level.",
+    "out_of_bounds": "Players can leave the playable area and get lost or stuck.",
+    "dupe": "Players can farm points, so scores and rewards stop meaning anything.",
+    "ghost_score": "Scores become unfair: they go up without anyone playing.",
+}
+
+
+def _action_name(a: str) -> str:
+    for pre in ("move_", "toggle_", "ui_"):
+        if a.startswith(pre):
+            a = a[len(pre):]
+    return {"start_game": "Start"}.get(a, a.replace("_", " ").title())
+
+
+def _tick_rate(project_dir: str | None) -> int:
+    try:
+        txt = open(os.path.join(project_dir, "project.godot")).read()
+        m = __import__("re").search(r"physics_ticks_per_second=(\d+)", txt)
+        return int(m.group(1)) if m else 60
+    except (OSError, TypeError):
+        return 60
+
+
+def _secs(frames: int, hz: int) -> str:
+    t = frames / hz
+    return f"{max(0.1, round(t, 1)):g} s"
+
+
+def repro_words(plays: list, hz: int = 60) -> str:
+    """[[{hold:[move_right], frames:24}, ...]] -> 'hold Right for 0.4 s, then tap Jump twice, then press Pause'."""
+    steps = []  # [kind, keys, frames, count]
+    for seg in [s for p in plays for s in p]:
+        keys = " + ".join(_action_name(a) for a in seg.get("hold", []))
+        n = int(seg.get("frames", 1))
+        if not keys:
+            if n / hz < 0.1:  # a short gap just releases the keys
+                continue
+            kind = "wait"
+        else:
+            kind = "tap" if n / hz < 0.15 else "hold"
+        if steps and steps[-1][0] == kind and steps[-1][1] == keys and kind in ("tap", "wait"):
+            steps[-1][2] += n
+            steps[-1][3] += 1
+            continue
+        steps.append([kind, keys, n, 1])
+    words = []
+    for kind, keys, n, c in steps:
+        if kind == "wait":
+            words.append(f"wait {_secs(n, hz)}")
+        elif kind == "hold":
+            words.append(f"hold {keys} for {_secs(n, hz)}")
+        else:
+            times = {1: "", 2: " twice"}.get(c, f" {c} times")
+            words.append(("press " if keys in ("Pause", "Start") else "tap ") + keys + times)
+    return ", then ".join(words) or "just start the level"
+
+
+def plain(report: dict, project_dir: str | None = None) -> dict:
+    """Plain-English summary of a report, from per-class templates filled with the report's real values."""
+    import re
+    cls = report.get("bug_class", "")
+    project_dir = project_dir or report.get("game")
+    cfg = {}
+    try:
+        cfg = json.load(open(os.path.join(project_dir, "qa_crew.json")))
+    except (OSError, TypeError, ValueError):
+        pass
+    hz = _tick_rate(project_dir)
+    st = report.get("state_at_failure") or {}
+    actual = str(report.get("actual", ""))
+    at = f"({st.get('x', 0):.0f}, {st.get('y', 0):.0f})" if "x" in st else ""
+    plays = (report.get("repro") or {}).get("plays") or []
+    how = repro_words(plays, hz)
+    segs = [s for p in plays for s in p if s.get("hold")]
+    last = _action_name(segs[-1]["hold"][-1]) if segs else ""
+    air = st.get("floor") is False
+    if cls == "crash":
+        when = (f" when you press {last}" if last in ("Pause", "Start") else (f" right after you {('tap ' + last)}" if last else ""))
+        head = f"The game hit a script error{when}{' in mid-air' if air else ''}."
+        msg = actual.split(" at ", 1)[0]
+        where = actual.split(" at ", 1)[1] if " at " in actual else ""
+        loc = re.search(r"res://([\w./-]+\.gd):(\d+)", where)
+        what = (f"Godot stopped running the script at {loc.group(1)} line {loc.group(2)}, so the rest of that code did not run."
+                if loc else "Godot stopped running a script, so the rest of that code did not run.") + \
+            f" The error was: {msg.rstrip('.')}."
+    elif cls == "clip":
+        how_land = " after a hard landing" if not segs or all(not s.get("hold") or s["hold"] == ["jump"] for s in segs) else ""
+        if "inside" in actual:
+            head = f"The player ended up inside the ground{how_land} at {at}."
+        else:
+            head = f"The player went through solid ground{how_land} at {at}."
+        what = "The player's body moved into solid level geometry instead of stopping on it."
+    elif cls == "infinite_jump":
+        m = re.search(r"#(\d+)", actual)
+        n = int(m.group(1)) if m else 2
+        allowed = int(cfg.get("max_air_jumps", 1))
+        head = f"You can keep jumping in mid-air: {n + 1} jumps before landing, but only {allowed} extra {'is' if allowed == 1 else 'are'} allowed."
+        what = f"The player jumped {n} times in the air without touching the ground."
+    elif cls == "out_of_bounds":
+        head = "The player can leave the level."
+        what = f"The player reached {at}, outside the level's edges."
+    elif cls == "dupe":
+        head = "The score went up more than the coins collected."
+        what = actual[:1].upper() + actual[1:] + "."
+    elif cls == "ghost_score":
+        head = "The score keeps going up after the player died."
+        what = "Points were added while the player was dead or hidden."
+    elif cls.startswith("rule:"):
+        rule = (report.get("rule") or {}).get("text") or str(report.get("expected", "")).replace("House rule: ", "")
+        head = f"Broke your rule: {rule}"
+        what = f"The automatic check for this rule found: {actual}."
+    else:
+        head, what = report.get("title", cls), actual
+    seed = (report.get("repro") or {}).get("seed", 0)
+    spawn = f" from spawn point {seed % len(cfg['spawns']) + 1}" if cfg.get("spawns") else ""
+    return {"headline": head,
+            "what_happened": what,
+            "how_to_see_it": f"Start the level{spawn}, then {how}. Or press Replay in game.",
+            "why_it_matters": WHY.get(cls, "You said this must never happen in your game." if cls.startswith("rule:") else "")}
+
+
 def markdown(r: dict) -> str:
     img = f"![failure]({r['evidence']['gif']})\n\n" if r.get("evidence", {}).get("gif") else ""
-    return f"""# {r['title']}
+    pl = r.get("plain") or plain(r)
+    return f"""# {pl['headline']}
+
+{img}**What happened:** {pl['what_happened']}
+
+**How to see it:** {pl['how_to_see_it']}
+
+**Why it matters:** {pl['why_it_matters']}
+
+## Details for AI agents
+
+### {r['title']}
 
 **Class:** `{r['bug_class']}`  **Game:** `{r['game']}`  **Reproduces:** {'yes' if r['reproduced'] else 'NO'}
 
-{img}**Expected:** {r['expected']}
+**Expected:** {r['expected']}
 
 **Actual:** {r['actual']}
 
@@ -300,7 +437,7 @@ def hunt(project: str, genome_dir: str | None, seeds: list, out_dir: str, player
     print(f"PROGRESS verify 0/{len(todo)}", flush=True)
     for i, f in enumerate(todo):
         r = build_report(os.path.abspath(project), f, out_dir, evidence)
-        print(f"[{r['bug_class']}] {r['title']}  repro {r['repro_tokens']}  -> {r['id']}.md", flush=True)
+        print(f"[{r['bug_class']}] {r['plain']['headline']}  repro {r['repro_tokens']}  -> {r['id']}.md", flush=True)
         print(f"PROGRESS verify {i + 1}/{len(todo)}", flush=True)
         reports.append(r)
     json.dump({"project": project, "genome": genome_dir, "seeds": seeds, "reports": [r["id"] for r in reports],

@@ -42,5 +42,11 @@
     "strip": "evidence/clip_seed7_strip.png",
     "strip_frames": 33
   },
-  "check": "python -m respawn.qa check godot/games/platformer_heldout/qa_reports/clip-545d4178.json"
+  "check": "python -m respawn.qa check godot/games/platformer_heldout/qa_reports/clip-545d4178.json",
+  "plain": {
+    "headline": "The player went through solid ground after a hard landing at (0, 145).",
+    "what_happened": "The player's body moved into solid level geometry instead of stopping on it.",
+    "how_to_see_it": "Start the level from spawn point 8, then wait 0.6 s. Or press Replay in game.",
+    "why_it_matters": "Players can get stuck inside the level or fall through it."
+  }
 }

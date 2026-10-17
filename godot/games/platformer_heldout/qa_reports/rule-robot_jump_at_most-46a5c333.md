@@ -1,8 +1,18 @@
-# House rule robot_jump_at_most: air jumps 2 > allowed 1
-
-**Class:** `rule:robot_jump_at_most`  **Game:** `/home/user/curosehack/godot/games/platformer_heldout`  **Reproduces:** yes
+# Broke your rule: The robot can jump at most twice before it lands again.
 
 ![failure](evidence/rule-robot_jump_at_most_seed0.gif)
+
+**What happened:** The automatic check for this rule found: air jumps 2 > allowed 1.
+
+**How to see it:** Start the level from spawn point 1, then wait 0.3 s, then tap Jump 3 times. Or press Replay in game.
+
+**Why it matters:** You said this must never happen in your game.
+
+## Details for AI agents
+
+### House rule robot_jump_at_most: air jumps 2 > allowed 1
+
+**Class:** `rule:robot_jump_at_most`  **Game:** `/home/user/curosehack/godot/games/platformer_heldout`  **Reproduces:** yes
 
 **Expected:** House rule: The robot can jump at most twice before it lands again.
 
