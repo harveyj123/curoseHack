@@ -75,6 +75,9 @@ class GodotGame:
                 tw, th = (int(v) for v in os.environ.get("QA_TILE", "640x360").split("x"))
                 cols = int(os.environ.get("QA_COLS", "3"))
                 args += ["--resolution", f"{tw}x{th}", "--position", f"{self.slot % cols * tw},{self.slot // cols * th}"]
+            elif watch and os.environ.get("QA_WATCH_GEOMETRY"):  # e.g. 800x450+1600+0: keep the watch window off the editor
+                size, x, y = os.environ["QA_WATCH_GEOMETRY"].split("+")
+                args += ["--resolution", size, "--position", f"{x},{y}"]
             if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
                 args = ["xvfb-run", "-a", "-s", "-screen 0 1280x800x24"] + args
         args += ["--", f"--qa-port={self.port}"] + (["--qa-watch"] if watch else [])

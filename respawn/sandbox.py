@@ -62,10 +62,13 @@ def static_check(source: str) -> dict:
 
 def _limits():  # runs in the child before exec
     import resource
-    resource.setrlimit(resource.RLIMIT_CPU, (3, 3))
-    resource.setrlimit(resource.RLIMIT_AS, (512 * 2**20, 512 * 2**20))
-    resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
-    resource.setrlimit(resource.RLIMIT_NPROC, (0, 0)) if hasattr(resource, "RLIMIT_NPROC") else None
+    # Each limit is best effort: macOS rejects RLIMIT_AS, and a failure here would kill every tool call.
+    for name, value in (("RLIMIT_CPU", 3), ("RLIMIT_AS", 512 * 2**20), ("RLIMIT_FSIZE", 0), ("RLIMIT_NPROC", 0)):
+        if hasattr(resource, name):
+            try:
+                resource.setrlimit(getattr(resource, name), (value, value))
+            except (ValueError, OSError):
+                pass
 
 
 def execute(source: str, mode: str, obs: dict, args: dict | None = None, timeout: float = 5.0):

@@ -23,7 +23,11 @@ var key_edit := LineEdit.new()
 var repo_edit := LineEdit.new()
 var genome_edit := LineEdit.new()
 var python_edit := LineEdit.new()
-var seeds_edit := LineEdit.new()
+var seeds_edit := LineEdit.new()  # the seed spec sent to respawn.qa; set from runs_spin
+var runs_spin := SpinBox.new()
+var crew_pick := OptionButton.new()
+var _crew_values: Array = []  # crew_pick item -> genome_edit value ("" newest trained, "none" untrained, or a folder)
+var activity := Label.new()
 var watch_check := CheckBox.new()
 var run_button := Button.new()
 var learned_link := LinkButton.new()
@@ -146,6 +150,11 @@ func _ready() -> void:
 			if want == "Tools":  # the bottom of the Crew tab: night 1's coach-written tool
 				await get_tree().create_timer(0.5).timeout
 				crew_scroll.scroll_vertical = 100000
+		if want == "RunLive":  # docs screenshots: start a hunt (key from CRUSOE_API_KEY when none is saved)
+			tabs.current_tab = _tab_index("Run")
+			if key_edit.text == "":
+				key_edit.text = OS.get_environment("CRUSOE_API_KEY")
+			_on_run()
 		if want == "Suggest":  # Rules tab scrolled to the suggestions
 			tabs.current_tab = _tab_index("Rules")
 			await get_tree().create_timer(1.0).timeout
@@ -294,6 +303,17 @@ func _build_bugs() -> Control:
 	refresh.text = "Refresh"
 	refresh.pressed.connect(_refresh_bugs)
 	bar.add_child(refresh)
+	var clear := Button.new()
+	clear.text = "Clear list"
+	clear.tooltip_text = "Move every report into qa_reports/archive/ so the next run starts from an empty list (nothing is deleted)"
+	var confirm := ConfirmationDialog.new()
+	confirm.title = "Clear the bug list?"
+	confirm.dialog_text = "All current bug reports, replays and GIFs move to qa_reports/archive/<date and time>/.\nNothing is deleted, so you can get them back from there."
+	confirm.ok_button_text = "Clear list"
+	confirm.confirmed.connect(_clear_bugs)
+	root.add_child(confirm)
+	clear.pressed.connect(func(): confirm.popup_centered())
+	bar.add_child(clear)
 	root.add_child(bar)
 	var bar2 := HBoxContainer.new()
 	class_filter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -452,18 +472,32 @@ func _build_run() -> Control:
 	_add_row(root, "Python", python_edit)
 	python_edit.placeholder_text = "python3 with Pillow (e.g. <crew folder>/.venv/bin/python3)"
 	python_edit.text = es.get_setting(PYTHON_SETTING) if es.has_setting(PYTHON_SETTING) else _guess_python()
-	_add_row(root, "Crew version", genome_edit)
-	genome_edit.placeholder_text = "empty = newest trained crew; none = untrained"
+	_add_row(root, "Which crew tests this build", crew_pick)
+	crew_pick.tooltip_text = "The trained crew learned from earlier training rounds; the untrained crew is the starting point, for comparison"
+	crew_pick.item_selected.connect(func(i):
+		genome_edit.text = str(_crew_values[i]) if i < _crew_values.size() else ""
+		_update_genome_preview())
+	# genome_edit stays the stored value behind the dropdown ("" = newest trained, "none" = untrained, or a folder)
 	genome_edit.text = es.get_setting(GENOME_SETTING) if es.has_setting(GENOME_SETTING) else ""
+	_fill_crew_pick.call_deferred()
 	genome_preview.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	genome_preview.add_theme_color_override("font_color", _col("font_disabled_color"))
 	genome_preview.add_theme_font_size_override("font_size", int(12 * EditorInterface.get_editor_scale()))
 	root.add_child(genome_preview)
 	genome_edit.text_changed.connect(func(_t): _update_genome_preview())
 	_update_genome_preview.call_deferred()
-	_add_row(root, "Sessions (seeds)", seeds_edit)
+	_add_row(root, "Test runs", runs_spin)
+	runs_spin.min_value = 1
+	runs_spin.max_value = 12
+	runs_spin.value = 4
+	var runs_hint := Label.new()
+	runs_hint.text = "How many times the crew plays your game. More runs find more bugs but take longer."
+	runs_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	runs_hint.add_theme_color_override("font_color", _col("font_disabled_color"))
+	runs_hint.add_theme_font_size_override("font_size", int(12 * EditorInterface.get_editor_scale()))
+	root.add_child(runs_hint)
 	seeds_edit.text = "0-3"
-	watch_check.text = "Watch live (first session plays in a game window)"
+	watch_check.text = "Watch live (test run 1 plays in a game window you can watch)"
 	watch_check.button_pressed = es.get_setting(WATCH_SETTING) if es.has_setting(WATCH_SETTING) else true
 	root.add_child(watch_check)
 	run_button.text = "Run QA crew"
@@ -487,6 +521,12 @@ func _build_run() -> Control:
 	run_status.text = "Idle. Press Run QA crew to start a hunt."
 	run_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(run_status)
+	# What the tester is doing right now, in plain words (from the LIVE / PROGRESS / bug lines respawn.qa prints).
+	activity.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	activity.add_theme_font_size_override("font_size", int(15 * EditorInterface.get_editor_scale()))
+	activity.add_theme_color_override("font_color", Color("#5ec8e5"))
+	activity.visible = false
+	root.add_child(activity)
 	run_progress.min_value = 0
 	run_progress.max_value = 1
 	run_progress.value = 0
@@ -616,6 +656,33 @@ func _learned_line(gdir: String) -> String:
 		return "This run uses crew version %s. See how it learned →" % (ver if ver != "" else "0")
 	return "This run uses the learned crew: version %s, from %d kept change(s) in %d training round(s). See how it learned →" % [ver if ver != "" else "0", kept, nights]
 
+func _fill_crew_pick() -> void:
+	# Plain choices over the genome folders: newest trained (default), untrained, then every other version.
+	crew_pick.clear()
+	_crew_values.clear()
+	var newest := _newest_demo_genome()
+	var nv := newest.get_file().trim_prefix("gen_").lstrip("0")
+	crew_pick.add_item("Latest trained crew (version %s)" % (nv if nv != "" else "0"))
+	_crew_values.append("")
+	crew_pick.add_item("Untrained crew (version 0)")
+	_crew_values.append("none")
+	var base := repo_edit.text.path_join("demo/genomes")
+	if DirAccess.dir_exists_absolute(base):
+		var names := Array(DirAccess.get_directories_at(base))
+		names.sort()
+		for d in names:
+			var v := str(d).trim_prefix("gen_").lstrip("0")
+			if v == "" or "demo/genomes/" + d == newest:
+				continue
+			crew_pick.add_item("Crew version %s" % v)
+			_crew_values.append("demo/genomes/" + d)
+	var cur := genome_edit.text.strip_edges()
+	if not _crew_values.has(cur):
+		crew_pick.add_item("Custom: %s" % cur)
+		_crew_values.append(cur)
+	crew_pick.select(_crew_values.find(cur))
+	_update_genome_preview()
+
 func _newest_demo_genome() -> String:
 	# The trained crew shipped with the repo (demo/genomes/gen_NNN), so a fresh checkout hunts with it by default.
 	var names := Array(DirAccess.get_directories_at(repo_edit.text.path_join("demo/genomes")))
@@ -632,6 +699,8 @@ func _on_run() -> void:
 	if key_edit.text.strip_edges() == "" or repo_edit.text.strip_edges() == "":
 		_out("[color=orange]Set the Crusoe API key and the crew folder first.[/color]\n")
 		return
+	_runs_total = int(runs_spin.value)
+	seeds_edit.text = "0-%d" % (_runs_total - 1)
 	var project := ProjectSettings.globalize_path("res://")
 	var out_dir := ProjectSettings.globalize_path(REPORTS)
 	var args := PackedStringArray(["CRUSOE_API_KEY=" + key_edit.text,
@@ -652,11 +721,83 @@ func _on_run() -> void:
 		return
 	run_button.disabled = true
 	_bugs_this_run = 0
+	_runs_done = 0
+	_say("Starting the game and the crew…")
 	_set_status("Starting the crew...", 0, 1)
 	_set_step(0)
 	_out("[b]QA crew started[/b] on %s\n" % project)
 
 var _bugs_this_run := 0
+var _runs_total := 4
+var _runs_done := 0
+
+func _say(t: String) -> void:
+	activity.visible = true
+	activity.text = t
+
+func _plain_inputs(tokens: String) -> String:
+	# 'R30 RJ20 W5' -> "goes right, jumps while going right, waits" (frames at 60 per second are not worth saying)
+	var names := {"R": "right", "L": "left", "U": "up", "D": "down"}
+	var out := []
+	for tok in tokens.split(" ", false):
+		var keys := ""
+		for ch in tok:
+			if ch >= "0" and ch <= "9":
+				break
+			keys += ch
+		var dirs := []
+		for ch in keys:
+			if names.has(ch):
+				dirs.append(names[ch])
+		var step := ""
+		if keys == "W" or keys == "":
+			step = "waits"
+		elif keys.contains("J"):
+			step = "jumps" + ((" " + " and ".join(dirs)) if dirs.size() > 0 else "")
+		elif dirs.size() > 0:
+			step = "goes " + " and ".join(dirs)
+		else:
+			step = "presses " + keys
+		if out.is_empty() or out[-1] != step:
+			out.append(step)
+	if out.size() > 5:
+		out = out.slice(0, 5) + ["…"]
+	return ", then ".join(out)
+
+func _live_activity(line: String) -> void:
+	# LIVE Hunter Nano · play R30 RJ20 · bugs: none yet · NEW BUG: clip  (the hunter's own reason)
+	var body := line.substr(5)
+	var why := ""
+	if body.ends_with(")") and body.contains("  ("):
+		why = body.substr(body.rfind("  (") + 3).trim_suffix(")")
+		body = body.left(body.rfind("  ("))
+	var parts := body.split(" · ")
+	var who := parts[0] if parts.size() > 0 else "The tester"
+	var what := parts[1] if parts.size() > 1 else ""
+	var t := "Test run 1 of %d (in the game window): %s " % [_runs_total, who]
+	var move := _plain_inputs(what.substr(5)) if what.begins_with("play ") else \
+		{"reset": "restarts the level", "wait": "waits", "": ""}.get(what, "asks its helper tool %s for advice" % what)
+	t += (move if move != "" else "is choosing its next move") + "."
+	if why != "":
+		t += "\nWhy: " + why
+	for p in parts:
+		if p.begins_with("NEW BUG: "):
+			t = "Possible bug: %s. It will be replayed to confirm it is real once the test runs finish.\n" % _plain_classes(p.substr(9)) + t
+	_say(t)
+
+func _plain_classes(csv: String) -> String:
+	var out := []
+	for c in csv.split(",", false):
+		out.append(_class_name(c.strip_edges()))
+	return ", ".join(out)
+
+func _class_name(c: String) -> String:
+	var known := {"clip": "the player went into a wall or floor", "out_of_bounds": "the player left the level",
+		"infinite_jump": "extra jumps in mid-air", "crash": "a script error", "dupe": "the score went up too much",
+		"ghost_score": "the score changed while the player was dead"}
+	if c.begins_with("rule:"):
+		return "broke your house rule \"%s\"" % c.substr(5)
+	return known.get(c, c.replace("_", " "))
 
 func _set_status(t: String, done: int, total: int) -> void:
 	run_status.text = t
@@ -669,6 +810,7 @@ func _run_done(code: int, _out: String) -> void:
 	_set_step(-1)
 	if code == 0:
 		_set_status("Done: %d verified bug report(s). See the Bugs tab." % _bugs_this_run, 1, 1)
+		_say("Finished: %d confirmed bug(s), each with a replay you can watch in the Bugs tab." % _bugs_this_run)
 	else:
 		_set_status("Stopped with exit code %d: see the log below." % code, 0, 1)
 	_out("[b]Done[/b] (exit %d). Reports are in res://qa_reports/\n" % code)
@@ -689,22 +831,59 @@ func _show(line: String) -> void:
 		var n := int(kd[1]) if kd.size() > 1 else 1
 		if parts[1] == "hunt":
 			_set_step(0)
-			_set_status("Hunting: %d of %d session(s) played" % [k, n], k, n)
+			_set_status("Hunting: %d of %d test run(s) finished" % [k, n], k, n)
+			_runs_total = n
+			if k == 0:
+				_say("The crew is playing %d test run(s) of your game, checking your house rules after every move.%s" % [n, "" if watch_check.button_pressed else " Turn on Watch live to see each move."])
+			else:
+				# Runs finish in any order: say how many are done and what the latest one found.
+				var b := line.get_slice("bugs=", 1).strip_edges() if line.contains("bugs=") else "-"
+				var found := "nothing found." if b == "-" or b == "" else "possible bug: %s." % _plain_classes(b)
+				if watch_check.button_pressed and k < n:  # keep the live line on the watched run
+					_set_status("Hunting: %d of %d test runs finished. The latest one found %s" % [k, n, found], k, n)
+				else:
+					_say("%d of %d test runs finished. The latest one found %s" % [k, n, found])
 		else:
 			_set_step(1)
 			_set_status("Verifying: %d of %d finding(s) replayed, minimized and recorded" % [k, n] if n > 0 else "No new findings to verify", k, maxi(n, 1))
+			if n == 0:
+				_say("All test runs finished with no possible bugs to confirm.")
+			elif k < n:
+				_say("Possible bug %d of %d: replaying it from a fresh start to confirm it is real, then cutting it down to the fewest moves and recording a GIF…" % [k + 1, n])
 		return
 	if line.begins_with("["):  # a bug report line from respawn.qa
 		_bugs_this_run += 1
+		_say("Confirmed: %s. Saved with a GIF and a step-by-step report." % line.get_slice("] ", 1).get_slice("  repro", 0).strip_edges())
 		var id := line.get_slice("-> ", 1).strip_edges()
 		var path := ProjectSettings.globalize_path("res://qa_reports/" + id)
 		_out("[color=tomato]BUG[/color] %s  [url=%s]report[/url]\n" % [_esc(line.get_slice("  repro", 0)), path])
 	elif line.begins_with("LIVE "):  # a watched hunter's move (respawn.qa hunt --watch)
+		_live_activity(line)
 		_out("[color=#5ec8e5]%s[/color]\n" % _esc(line.substr(5)))
 	else:
 		_out(_esc(line) + "\n")
 
 # ------------------------------------------------------------------ Bugs tab
+func _clear_bugs() -> void:
+	# Archive, never delete: reports, index and evidence (replays, GIFs) move to qa_reports/archive/<timestamp>/.
+	var base := ProjectSettings.globalize_path(REPORTS)
+	if not DirAccess.dir_exists_absolute(base):
+		return
+	var dest := base.path_join("archive").path_join(Time.get_datetime_string_from_system().replace(":", "-"))
+	DirAccess.make_dir_recursive_absolute(dest)
+	var moved := 0
+	for f in DirAccess.get_files_at(base):
+		if f.begins_with("."):
+			continue
+		if DirAccess.rename_absolute(base.path_join(f), dest.path_join(f)) == OK:
+			moved += 1
+	if DirAccess.dir_exists_absolute(base.path_join("evidence")):
+		DirAccess.rename_absolute(base.path_join("evidence"), dest.path_join("evidence"))
+	_sel = -1
+	_refresh_bugs()
+	bug_count.text = "Cleared: %d file(s) moved to the archive" % moved
+	bug_count.tooltip_text = dest
+
 func _refresh_bugs() -> void:
 	_all_reports.clear()
 	if DirAccess.dir_exists_absolute(REPORTS):
@@ -1707,7 +1886,11 @@ func _fill_card(first: float, best: float, rows: Array, version: int) -> void:
 			else:
 				var how := ("up from %.2f" % a) if b > a else (("down from %.2f" % a) if b < a else "the same as before")
 				sub += "On %s, which it never practiced on: %.2f per test run, %s.\n" % [str(row[0]), b, how]
-		sub += "In practice: %.2f bugs per test run, up from %.2f.\n" % [best / 10.0, first / 10.0] if best > first and not rows.is_empty() else ""
+		var np := _practice_runs()
+		if np > 0 and not rows.is_empty():
+			var pa := int(round(first / 10.0 * np))
+			var pb := int(round(best / 10.0 * np))
+			sub += "Practice levels: %d bugs in %d test runs, %s.\n" % [pb, np, ("up from %d" % pa) if pb > pa else ("was %d" % pa)]
 		if rows.is_empty():
 			sub = "Not yet tested on games it never practiced on."
 		card_box.add_child(_card_label(sub.strip_edges(), 12, dim))
@@ -1716,10 +1899,10 @@ func _fill_card(first: float, best: float, rows: Array, version: int) -> void:
 		card_box.add_child(_card_label("No run loaded yet. Pick a run folder below (demo, or an evolution run such as runs/hunt1) and press Load. This card then shows how many real bugs the starting crew and the trained crew find per test run, on games they never practiced on.", 12, dim))
 		return
 	if rows.is_empty():
-		card_box.add_child(_card_line("Practice games (bugs per test run)", first, best, null))
+		card_box.add_child(_card_line("Practice levels", first, best, {"n": _practice_runs()}))
 		card_box.add_child(_card_label("Unseen-game results appear here once the run has heldout_*.json files (python -m respawn eval).", 11, dim))
 		return
-	card_box.add_child(_card_line("Practice games (bugs per test run)", first, best, null))
+	card_box.add_child(_card_line("Practice levels", first, best, {"n": _practice_runs()}))
 	for row in rows:
 		card_box.add_child(_card_line(str(row[0]), float(row[1]), float(row[2]), row[3]))
 	var better := 0
@@ -1728,6 +1911,12 @@ func _fill_card(first: float, best: float, rows: Array, version: int) -> void:
 	card_box.add_child(_card_label("Real bugs found (each proven by a replay), starting crew → trained crew, in %s test runs per unseen game." % str(rows[0][3].get("n", "?")), 11, dim))
 	if better == 0:
 		card_box.add_child(_card_label("The trained crew did not do better on these new games: what it learned did not carry over.", 12, Color("#e0a040")))
+
+func _practice_runs() -> int:
+	# test runs per training round: the kept crew's per-session scores
+	var kept := _nights.filter(func(n): return n.get("accepted", false))
+	var sc = kept[-1].get("scores") if kept.size() > 0 else null
+	return sc.size() if sc is Dictionary or sc is Array else 0
 
 func _heldout_totals(rows: Array) -> Array:
 	# [bugs before, bugs after, test runs] summed over the unseen games (means are points: 10 per bug)
