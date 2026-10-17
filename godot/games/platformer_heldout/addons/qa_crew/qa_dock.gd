@@ -380,7 +380,7 @@ func _build_run() -> Control:
 	python_edit.placeholder_text = "python3 with Pillow (e.g. <crew folder>/.venv/bin/python3)"
 	python_edit.text = es.get_setting(PYTHON_SETTING) if es.has_setting(PYTHON_SETTING) else _guess_python()
 	_add_row(root, "Crew genome", genome_edit)
-	genome_edit.placeholder_text = "e.g. runs/hunt1/genomes/gen_004 (empty = untrained crew)"
+	genome_edit.placeholder_text = "empty = newest trained crew in demo/genomes; \"none\" = untrained"
 	genome_edit.text = es.get_setting(GENOME_SETTING) if es.has_setting(GENOME_SETTING) else ""
 	_add_row(root, "Sessions (seeds)", seeds_edit)
 	seeds_edit.text = "0-3"
@@ -489,6 +489,12 @@ func _exit_tree() -> void:
 	_jobs.clear()
 
 # ------------------------------------------------------------------ Run tab
+func _newest_demo_genome() -> String:
+	# The trained crew shipped with the repo (demo/genomes/gen_NNN), so a fresh checkout hunts with it by default.
+	var names := Array(DirAccess.get_directories_at(repo_edit.text.path_join("demo/genomes")))
+	names.sort()
+	return "demo/genomes/" + names[-1] if names.size() > 0 else ""
+
 func _on_run() -> void:
 	var es := EditorInterface.get_editor_settings()
 	es.set_setting(KEY_SETTING, key_edit.text)
@@ -503,10 +509,13 @@ func _on_run() -> void:
 	var out_dir := ProjectSettings.globalize_path(REPORTS)
 	var args := PackedStringArray(["CRUSOE_API_KEY=" + key_edit.text,
 		_python(), "-m", "respawn.qa", "hunt", "--project", project, "--seeds", seeds_edit.text, "--out", out_dir])
-	if genome_edit.text.strip_edges() != "":
-		var g := genome_edit.text
+	var g := genome_edit.text.strip_edges()
+	if g == "":
+		g = _newest_demo_genome()
+	if g != "" and g != "none":
 		if not g.is_absolute_path():
 			g = repo_edit.text.path_join(g)
+		output.append_text("Crew genome: %s\n" % _esc(g))
 		args.append_array(["--genome", g])
 	if watch_check.button_pressed:
 		args.append("--watch")
