@@ -1,0 +1,56 @@
+{
+  "player_class": "Player",
+  "score": {
+    "class": "CoinsCounter",
+    "property": "_coins_collected"
+  },
+  "collectible_class": "Coin",
+  "enemy_class": "Enemy",
+  "max_air_jumps": 1,
+  "spawns": [
+    [
+      90,
+      546
+    ],
+    [
+      300,
+      600
+    ],
+    [
+      700,
+      500
+    ],
+    [
+      -100,
+      300
+    ],
+    [
+      600,
+      300
+    ],
+    [
+      400,
+      350
+    ],
+    [
+      900,
+      300
+    ],
+    [
+      0,
+      -100
+    ],
+    [
+      800,
+      -100
+    ]
+  ],
+  "description": "a 2D pixel-art platformer (Godot's official demo): run, jump, double jump, shoot, collect coins",
+  "letters": {
+    "R": "move_right",
+    "L": "move_left",
+    "J": "jump",
+    "S": "shoot",
+    "P": "toggle_pause"
+  }
+}

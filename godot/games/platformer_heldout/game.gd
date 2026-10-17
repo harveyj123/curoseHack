@@ -16,6 +16,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	elif event.is_action_pressed(&"toggle_pause"):
 		var tree := get_tree()
+		var player := get_node_or_null(^"Level/Player") as Player
+		if player and not player.is_on_floor():
+			# PLANTED BUG (crash): PauseMenu has no show_air_hint(); pausing mid-air errors.
+			_pause_menu.call(&"show_air_hint")
 		tree.paused = not tree.paused
 		if tree.paused:
 			_pause_menu.open()

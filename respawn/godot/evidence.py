@@ -27,7 +27,8 @@ def capture(project_dir: str, finding: dict, out_dir: str, every: int = 2, windo
             kw = {"capture_every": every, "capture_dir": tmp} if i == hit_act else {}
             res = g.call("act", inputs=segs, **kw)
             o.judge(res, g.take_errors())
-            o.judge_score(res["state"], 0)
+            o.score_frames += [ev["f"] for ev in res["events"] if ev["type"] == "score"]
+            o.judge_score(res["state"], res["frames"][-1]["f"] if res["frames"] else 0)
             if i == hit_act:
                 break
         reproduced = finding["class"] in o.found

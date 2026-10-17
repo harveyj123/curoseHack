@@ -28,7 +28,9 @@ func _process(delta):
 		$AnimatedSprite2D.stop()
 
 	position += velocity * delta
-	position = position.clamp(Vector2.ZERO, screen_size)
+	# PLANTED BUG (out of bounds): the clamp is skipped while moving diagonally.
+	if velocity.x == 0 or velocity.y == 0:
+		position = position.clamp(Vector2.ZERO, screen_size)
 
 	if velocity.x != 0:
 		$AnimatedSprite2D.animation = &"right"
@@ -48,6 +50,9 @@ func start(pos):
 
 
 func _on_Player_body_entered(_body):
+	if Input.is_action_pressed(&"move_up") and (Input.is_action_pressed(&"move_left") or Input.is_action_pressed(&"move_right")):
+		# PLANTED BUG (crash): there is no DeathBurst node; dying while moving up-diagonally errors.
+		get_node_or_null(^"DeathBurst").emitting = true
 	hide() # Player disappears after being hit.
 	hit.emit()
 	# Must be deferred as we can't change physics properties on a physics callback.

@@ -195,6 +195,8 @@ def run_episode(llm: LLM, env_name: str, seed: int, genome: Genome, models: list
             out, sc, rep = {"cause": err}, 0, []
     finally:
         env.close()
+    print(f"  episode {env_name} seed {seed} genome {genome.fingerprint()}: score {sc} in {time.monotonic() - t0:.0f}s"
+          + (f" ERROR {err[:120]}" if err else ""), flush=True)
     return Episode(env_name, seed, genome.fingerprint(), sc, out, steps, rep, assign, round(time.monotonic() - t0, 1), err)
 
 

@@ -22,9 +22,10 @@ BUG_CLASSES = {
     "infinite_jump": "more mid-air jumps than the game allows",
     "out_of_bounds": "the player left the level bounds",
     "dupe": "the score went higher than the number of collectibles taken",
+    "ghost_score": "the score changed while the player was dead or hidden",
 }
 TOKEN = re.compile(r"([A-Za-z]+)(\d+)")
-SETTLE_FRAMES = 75
+SETTLE_FRAMES = 150
 
 
 def parse_inputs(text: str, controls: dict) -> list:
@@ -48,6 +49,7 @@ class Oracle:
         self.found: dict = {}            # class -> {"frame", "detail"}
         self.air_jumps = 0
         self.prev = start_state.get("player") or {}
+        self.score_frames: list = []     # frames of score increments (collect animations take ~60 frames)
 
     def _hit(self, cls, frame, detail):
         if cls not in self.found:
@@ -73,6 +75,10 @@ class Oracle:
             if b and (f["x"] < b["left"] or f["x"] > b["right"] or f["y"] < b["top"] or f["y"] > b["bottom"]):
                 new += self._hit("out_of_bounds", f["f"], f"at ({f['x']:.0f},{f['y']:.0f}), bounds {b}")
             self.prev = f
+        vis = {f["f"]: f.get("visible", True) for f in res["frames"]}
+        for ev in res.get("events", []):
+            if ev["type"] == "score" and ev.get("from") is not None and vis.get(ev["f"]) is False:
+                new += self._hit("ghost_score", ev["f"], f"score {ev['from']} -> {ev['to']} while the player was hidden/dead")
         return new
 
     def judge_score(self, state: dict, frame: int) -> list:
@@ -80,7 +86,8 @@ class Oracle:
         if sc is None or left < 0 or self.start_collectibles < 0:
             return []
         taken = self.start_collectibles - left
-        if sc > taken:
+        pending = sum(1 for f in self.score_frames if f > frame - 150)  # pickups still animating (~2 s)
+        if sc > taken + pending:
             return self._hit("dupe", frame, f"score {sc} but only {taken} collectibles were taken")
         return []
 
@@ -97,6 +104,16 @@ class GodotHuntEnv:
         self.game = GodotGame(os.path.join(ROOT, self.project))
         self.cfg = self.game.info.get("config") or {}
         self.controls = {k: v for k, v in (self.cfg.get("letters") or {}).items()}
+        if not self.controls:  # no qa_crew.json: guess from the game's InputMap
+            acts = set(self.game.info.get("actions") or [])
+            guess = {"R": ["move_right", "right", "ui_right"], "L": ["move_left", "left", "ui_left"],
+                     "U": ["move_up", "up", "ui_up"], "D": ["move_down", "down", "ui_down"], "J": ["jump"],
+                     "S": ["shoot", "fire", "attack"], "P": ["toggle_pause", "pause"], "E": ["start_game", "ui_accept"]}
+            for k, names in guess.items():
+                hit = next((n for n in names if n in acts), None)
+                if hit:
+                    self.controls[k] = hit
+            self.cfg["letters"] = self.controls
         self.toolbox = sandbox.Toolbox(tools or {})
         self.state = self.game.call("reset", seed=seed)
         self.map = self.game.call("map", cell=32)
@@ -188,6 +205,7 @@ Helpers are free for the tester (they take no game time). No file, network or os
             self.oracle.prev = self.state.get("player") or {}
             self.oracle.air_jumps = 0
             self.oracle.start_collectibles = self.state.get("collectibles_left", -1)
+            self.oracle.score_frames = []
             self.inputs = []
             self.last = "level restarted"
             return self.last
@@ -203,6 +221,9 @@ Helpers are free for the tester (they take no game time). No file, network or os
         self.inputs.append(segs)
         self.state = res["state"]
         new = self.oracle.judge(res, errors)
+        for ev in res["events"]:
+            if ev["type"] == "score":
+                self.oracle.score_frames.append(ev["f"])
         new += self.oracle.judge_score(self.state, res["frames"][-1]["f"] if res["frames"] else 0)
         for cls in new:
             self.findings.append({"class": cls, "detail": self.oracle.found[cls]["detail"], "seed": self.seed,
@@ -282,7 +303,8 @@ def verify(project: str, finding: dict) -> bool:
         for segs in finding["inputs"]:  # one bridge call per original play, exactly as recorded
             res = g.call("act", inputs=segs)
             o.judge(res, g.take_errors())
-            o.judge_score(res["state"], 0)
+            o.score_frames += [ev["f"] for ev in res["events"] if ev["type"] == "score"]
+            o.judge_score(res["state"], res["frames"][-1]["f"] if res["frames"] else 0)
         return finding["class"] in o.found
     finally:
         g.close()

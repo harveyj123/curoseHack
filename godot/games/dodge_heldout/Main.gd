@@ -4,7 +4,7 @@ extends Node
 var score
 
 func game_over():
-	$ScoreTimer.stop()
+	# PLANTED BUG (ghost score): the score timer is never stopped, so the score keeps rising after death.
 	$MobTimer.stop()
 	$HUD.show_game_over()
 	$Music.stop()

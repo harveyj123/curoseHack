@@ -146,7 +146,11 @@ func _score():
 	var sc = _cfg.get("score")
 	if sc == null:
 		return null
-	var node := _find(get_tree().root, func(n): return _class_of(n) == String(sc.get("class", "")))
+	var node: Node = null
+	if sc.has("node"):
+		node = _find(get_tree().root, func(n): return n.name == String(sc["node"]))
+	else:
+		node = _find(get_tree().root, func(n): return _class_of(n) == String(sc.get("class", "")))
 	if node == null:
 		return null
 	return node.get(String(sc.get("property", "score")))
@@ -212,6 +216,7 @@ func _reset(seed: int) -> Dictionary:
 	get_tree().paused = false
 	for a in InputMap.get_actions():
 		Input.action_release(a)
+	seed(seed)  # global RNG, so games that use randf()/randi() are reproducible too
 	get_tree().reload_current_scene()
 	await get_tree().process_frame
 	await get_tree().physics_frame
@@ -220,6 +225,11 @@ func _reset(seed: int) -> Dictionary:
 	if p and spawns.size() > 0:
 		var s = spawns[seed % spawns.size()]
 		(p as Node2D).global_position = Vector2(s[0], s[1])
+	var hook = _cfg.get("on_reset_call")  # e.g. press "Start" for games that open on a title screen
+	if hook != null:
+		var hn := _find(get_tree().root, func(n): return n.name == String(hook["node"]))
+		if hn and hn.has_method(String(hook["method"])):
+			hn.call(String(hook["method"]))
 	_frame = 0
 	for i in 3:
 		await get_tree().physics_frame
@@ -271,6 +281,14 @@ func _tunnel_check(p: Node2D, a: Vector2, b: Vector2) -> Dictionary:
 			out["inside"] = true
 	return out
 
+func _press(a: String, pressed: bool) -> void:
+	# Real InputEventActions (not just Input.action_press), so _input/_unhandled_input handlers and
+	# button shortcuts see them exactly as they would see a keyboard.
+	var ev := InputEventAction.new()
+	ev.action = a
+	ev.pressed = pressed
+	Input.parse_input_event(ev)
+
 func _act(inputs: Array, capture_every: int = 0, capture_dir: String = "") -> Dictionary:
 	var frames := []
 	var events := []
@@ -285,18 +303,18 @@ func _act(inputs: Array, capture_every: int = 0, capture_dir: String = "") -> Di
 		var n := clampi(int(seg.get("frames", 1)), 1, 600)
 		for a in hold:
 			if InputMap.has_action(a):
-				Input.action_press(a)
+				_press(a, true)
 		for k in n:
 			if k == 0:
 				for a in tap:
 					if InputMap.has_action(a):
-						Input.action_press(a)
+						_press(a, true)
 			await get_tree().physics_frame
 			_frame += 1
 			if k == 0:
 				for a in tap:
 					if InputMap.has_action(a) and not hold.has(a):
-						Input.action_release(a)
+						_press(a, false)
 			p = _player()
 			if p == null or not is_instance_valid(p):
 				events.append({"f": _frame, "type": "player_gone"})
@@ -324,5 +342,5 @@ func _act(inputs: Array, capture_every: int = 0, capture_dir: String = "") -> Di
 				scene0 = get_tree().current_scene
 		for a in hold:
 			if InputMap.has_action(a):
-				Input.action_release(a)
+				_press(a, false)
 	return {"frames": frames, "events": events, "state": _state()}

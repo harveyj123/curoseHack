@@ -22,6 +22,10 @@ run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.2")
 config/icon="res://icon.webp"
 
+[autoload]
+
+QABridge="*res://addons/qa_crew/qa_bridge.gd"
+
 [display]
 
 window/size/viewport_width=480

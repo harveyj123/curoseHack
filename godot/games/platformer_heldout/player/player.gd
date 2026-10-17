@@ -32,6 +32,8 @@ func _physics_process(delta: float) -> void:
 	elif Input.is_action_just_released("jump" + action_suffix) and velocity.y < 0.0:
 		# The player let go of jump early, reduce vertical momentum.
 		velocity.y *= 0.6
+		# PLANTED BUG (infinite jump): a short hop "refunds" the double jump, even mid-air.
+		_double_jump_charged = true
 	# Fall.
 	velocity.y = minf(TERMINAL_VELOCITY, velocity.y + gravity * delta)
 
@@ -45,7 +47,11 @@ func _physics_process(delta: float) -> void:
 			sprite.scale.x = -1.0
 
 	floor_stop_on_slope = not platform_detector.is_colliding()
+	var fall_speed := velocity.y
 	move_and_slide()
+	# PLANTED BUG (clip): the hard-landing "squash" shifts the body down into the floor.
+	if is_on_floor() and fall_speed > 650.0:
+		position.y += 18.0
 
 	var is_shooting := false
 	if Input.is_action_just_pressed("shoot" + action_suffix):
