@@ -84,6 +84,9 @@ def apply_proposal(champion: Genome, prop: dict, env_cls) -> Genome:
         cand.tools.pop(f, None)
     tool = prop.get("tool")
     if isinstance(tool, dict) and tool.get("source"):
+        src = tool["source"]
+        if "\n" not in src and "\\n" in src:  # model double-escaped the code into one line
+            tool["source"] = src.replace("\\n", "\n").replace("\\t", "\t").replace('\\"', '"')
         spec = env_cls.validate_tool(tool["source"])  # raises ValueError
         ext = {"python": ".py", "js": ".js"}.get(env_cls.tool_lang, ".txt")
         fname = tool.get("filename") or spec["name"] + ext
