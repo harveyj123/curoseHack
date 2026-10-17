@@ -47,5 +47,6 @@
   },
   "jump_vy": 250,
   "max_jump_vy": 400,
-  "wall_jumps": true
+  "wall_jumps": true,
+  "reset_settle_frames": 130
 }

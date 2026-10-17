@@ -270,7 +270,8 @@ func _reset(seed: int) -> Dictionary:
 		if hn and hn.has_method(String(hook["method"])):
 			hn.call(String(hook["method"]))
 	_frame = 0
-	for i in 3:
+	# Games with an intro (fade-in, spawn animation) set reset_settle_frames so play starts once the player can move.
+	for i in int(_cfg.get("reset_settle_frames", 3)):
 		await get_tree().physics_frame
 	return _state()
 
