@@ -200,15 +200,19 @@ def markdown(r: dict) -> str:
 """
 
 
+def _game_dir(game: str, report_path: str) -> str:
+    """`game` is relative to wherever the hunt ran; also try the repo root and the project that holds qa_reports/."""
+    repo = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    for cand in (os.path.abspath(game), os.path.join(repo, game),
+                 os.path.abspath(os.path.join(os.path.dirname(report_path), ".."))):
+        if os.path.exists(os.path.join(cand, "project.godot")):
+            return cand
+    return os.path.abspath(game)
+
+
 def check(path: str) -> int:
     r = json.load(open(path))
-    game = r["game"]
-    if not os.path.exists(os.path.join(game, "project.godot")):
-        # "game" is relative to where the hunt ran; a report kept in <project>/qa_reports finds its game from there
-        here = os.path.dirname(os.path.dirname(os.path.abspath(path)))
-        if os.path.exists(os.path.join(here, "project.godot")):
-            game = here
-    rep = Reproducer(os.path.abspath(game))
+    rep = Reproducer(_game_dir(r["game"], path))
     try:
         o, _, _ = rep.run(r["repro"]["seed"], r["repro"]["plays"])
     finally:
