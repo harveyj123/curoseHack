@@ -88,6 +88,11 @@ func _replay() -> void:
 		await _act(plays[i])
 	_hud.text = "%s  done at frame %d" % [label, _frame]
 
+func _client_gone() -> void:
+	# The crew launched this game; when its connection drops (crew exited or was killed), quit instead of lingering.
+	_peer = null
+	get_tree().quit()
+
 func _process(_delta: float) -> void:
 	if _peer == null and _server.is_connection_available():
 		_peer = _server.take_connection()
@@ -96,7 +101,7 @@ func _process(_delta: float) -> void:
 		return
 	_peer.poll()
 	if _peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
-		_peer = null
+		_client_gone()
 		return
 	var n := _peer.get_available_bytes()
 	if n == 0 and not _busy and _buf.find("\n") == -1:
@@ -113,7 +118,7 @@ func _process(_delta: float) -> void:
 				RenderingServer.force_draw()
 			_peer.poll()
 			if _peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
-				_peer = null
+				_client_gone()
 				return
 			n = _peer.get_available_bytes()
 	if n > 0:
