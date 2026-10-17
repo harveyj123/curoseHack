@@ -32,9 +32,19 @@ def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
+def blocked_streak(history: list) -> int:
+    """Nights in a row, counting back from the latest, whose change the gate did not keep."""
+    n = 0
+    for h in reversed(history):
+        if h.get("accepted"):
+            break
+        n += 1
+    return n
+
+
 def evolve(llm, env_name: str, run_dir: str, gens: int, train_seeds: list, player_models: list, coach_model: str,
            parallel: int = 4, start: Genome | None = None, min_delta: float = 1.0, min_p: float = 0.8,
-           thinking: bool = False, rerun_champion: bool = True):
+           thinking: bool = False, rerun_champion: bool = True, patience: int = 3):
     os.makedirs(os.path.join(run_dir, "episodes"), exist_ok=True)
     state_path = os.path.join(run_dir, "state.json")
     lineage_path = os.path.join(run_dir, "lineage.jsonl")
@@ -69,6 +79,10 @@ def evolve(llm, env_name: str, run_dir: str, gens: int, train_seeds: list, playe
 
     history = [json.loads(line) for line in open(lineage_path)][1:]
     for g in range(first_gen, first_gen + gens):
+        streak = blocked_streak(history)
+        if patience and streak >= patience:  # plateau: more nights only spend tokens until the game changes
+            log(f"stopping: no gain in {streak} nights in a row (patience {patience}); train again after the next build")
+            break
         t0 = time.monotonic()
         log(f"night {g}: coach dreaming over {len(champ_eps)} episodes")
         try:

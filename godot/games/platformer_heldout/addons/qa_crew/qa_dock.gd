@@ -1582,6 +1582,28 @@ func _playbook_bullets(md: String, limit := 6) -> Array:
 		out = out.slice(0, limit) + ["… and %d more" % (out.size() - limit)]
 	return out
 
+func _training_status() -> String:
+	# When to stop training: the same rule as `respawn evolve --patience 3` (3 blocked nights in a row = plateau).
+	const PATIENCE := 3
+	var streak := 0
+	var last_kept := 0
+	for n in _nights:
+		if int(n.get("gen", 0)) <= 0:
+			continue
+		if n.get("accepted", false):
+			streak = 0
+			last_kept = int(n.get("gen", 0))
+		else:
+			streak += 1
+	if streak >= PATIENCE:
+		return "Training status: plateaued, no gain in %d nights in a row. Training pauses until your next build." % streak
+	var left := PATIENCE - streak
+	var t := "Training status: still learning"
+	t += (", last change kept on night %d." % last_kept) if last_kept > 0 else ", no change kept yet."
+	if streak > 0:
+		t += " %d more blocked night%s and it pauses until your next build." % [left, "" if left == 1 else "s"]
+	return t
+
 func _genome_summary(gdir: String) -> String:
 	# One plain line for a genome folder (also used by the Run tab's genome preview).
 	if gdir == "" or not DirAccess.dir_exists_absolute(gdir):
@@ -1667,6 +1689,7 @@ func _fill_card(first: float, best: float, rows: Array, version: int) -> void:
 		else:
 			head += "It finds %.2f real bugs per test run, was %.2f." % [best / 10.0, first / 10.0]
 		card_box.add_child(_card_label(head, 16, _col("font_color")))
+		card_box.add_child(_card_label(_training_status(), 13, _col("accent_color")))
 		var sub := ""
 		for row in rows:
 			var a := float(row[1]) / 10.0
